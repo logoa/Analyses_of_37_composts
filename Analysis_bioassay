@@ -1,0 +1,3412 @@
+# Analysis bioassays
+# Started 28.09.23
+# Last changes: 10.11.23
+# Author: Anja Logo
+
+# IMPORTANT NOTE BY THE AUTHOR: DO ALWAYS RUN ALL LINES OF 0!!!
+# ALWAYS AT THE END OF A CHAPTER THERE IS A RM FUNCTION FOR CLEANING UP
+# 1 is not necessary to run since the data file is saved and loaded in 0.1
+
+# 0 Loading library and data ALWAYS RUN----------
+  setwd("C:/Users/anja.logo/ownCloud/Kompostmikrobio/Statistics/Bioassays")
+  library(RColorBrewer) # addtional color 
+  library(gridExtra)
+  library(factoextra)
+  library(multcompView) # letters for direct comparisons
+  library(corrplot)
+  library(rstatix)
+  library(Hmisc)
+  library(knitr)
+  library(reshape2)
+  library(hms)
+  #library(kableExtra)
+  library(ggpubr)
+  library(dunn.test) # non-paramteric direct comparison
+  library(agricolae)
+  library(lme4) # linear mixed models
+  library(ggm)
+  library(tidyverse)
+  library(grid)
+  library(ggfortify)
+  library(ggrepel) # plot lables without overlap
+  library(glmulti)
+  library(MuMIn)
+  library(caret)
+  library(glmnet)
+  library(ade4)
+
+##  0.1 Data ------------------
+  # Gu-cress
+  df_cp <-read.csv("Compost_ds_gp/20230728_df_cp.csv", header =TRUE, sep=",")
+  df_cp$X <-NULL
+  factors <- colnames(df_cp[,1:9])
+  df_cp[factors] <-lapply(df_cp[factors], factor)
+  df_cp$treatment <- as.character(df_cp$treatment)
+  df_cp$treatment <- factor(df_cp$treatment, levels=unique(df_cp$treatment))
+  df_cp$batch <- as.integer(df_cp$batch)
+  
+  # Gu-cucumber rep 1
+  df_cu_gu <- read.csv("Compost_ds_gp/20230227_df_cu_gu.csv", header = TRUE, sep = ",")
+  df_cu_gu$X <-NULL
+  factors <- colnames(df_cu_gu[,c(2:7)])
+  df_cu_gu[factors] <-lapply(df_cu_gu[factors], factor)
+  df_cu_gu$treatment <- as.character(df_cu_gu$treatment)
+  df_cu_gu$treatment <- factor(df_cu_gu$treatment, levels=unique(df_cu_gu$treatment)) 
+  
+  levels_to_relevel <- c("Std5", "Std4", "Std3", "Std2")
+  for (level in levels_to_relevel) {
+    df_cu_gu$treatment <- relevel(df_cu_gu$treatment, level)}
+  df_cu_gu$batch <- as.integer(df_cu_gu$batch)
+  df_cu_gu$surv.perc <- df_cu_gu$surv*20 # Calculate percentages for survival plants
+  df_cu_gu[df_cu_gu$avgplant == Inf,]$avgplant <-0 # remove Inf values
+  
+  # Gu-cucumber rep 2
+  df_cu_gu_r_all <-read.csv("Compost_ds_gp/20230227_df_cu_gu_R.csv", header = TRUE, sep = ",") # repetition batch III
+  df_cu_gu_r_all$X <-NULL
+  factors <- colnames(df_cu_gu_r_all[,c(2:7)])
+  df_cu_gu_r_all[factors] <-lapply(df_cu_gu_r_all[factors], factor)
+  df_cu_gu_r_all$treatment <- as.character(df_cu_gu_r_all$treatment)
+  df_cu_gu_r_all$treatment <- factor(df_cu_gu_r_all$treatment, levels=unique(df_cu_gu_r_all$treatment)) 
+  
+  levels_to_relevel <- c("Std4", "Std3", "Std2")
+  for (level in levels_to_relevel) {
+    df_cu_gu_r_all$treatment <- relevel(df_cu_gu_r_all$treatment, level)}
+  df_cu_gu_r_all$batch <- as.integer(df_cu_gu_r_all$batch)
+  df_cu_gu_r_all$surv.perc <- df_cu_gu_r_all$surv*20 # Calculate percentages for survival plants
+  
+  # Rs-cucumber
+  df_cu_rs <-read.csv("Compost_ds_gp/20230227_df_cu_rs.csv", header = TRUE, sep = ",")
+  df_cu_rs$X <-NULL
+  df_cu_rs$treatment <- as.character(df_cu_rs$treatment)
+  df_cu_rs$treatment <- factor(df_cu_rs$treatment, levels=unique(df_cu_rs$treatment))
+  levels_to_relevel <- c("Std5", "Std4", "Std3", "Std2")
+  for (level in levels_to_relevel) {
+    df_cu_rs$treatment <- relevel(df_cu_rs$treatment, level)}
+  df_cu_rs$batch <- as.integer(df_cu_rs$batch)
+  df_cu_rs[df_cu_rs$avgplant == Inf,]$avgplant <-0 # remove Inf values
+  
+  # Delete K41, K46 and K47 and replace
+  df_cu_rs <- df_cu_rs[df_cu_rs$treatment != "K41" & df_cu_rs$treatment != "K46" & df_cu_rs$treatment != "K47" & df_cu_rs$treatment != "Std5_2"  ,]
+  df_cu_rs[df_cu_rs$treatment == "K41_2",]$treatment = "K41"
+  df_cu_rs[df_cu_rs$treatment == "K46_2",]$treatment = "K46"
+  df_cu_rs[df_cu_rs$treatment == "K47_2",]$treatment = "K47"
+  df_cu_rs$treatment  = droplevels(df_cu_rs$treatment)
+  
+  # Change order again
+  levels(df_cu_rs$treatment) =c("Std2","Std3","Std4", "Std5","K6","K7","K8","K9","K10","K11","K12","K13","K14","K15", 
+                                "K17","K18","K19","K20","K21","K22","K23","K24","K25","K26","K27","K28","K29","K30" ,  
+                                "K31","K32","K33","K34","K35","K36","K37","K39","K40","K41","K42","K43","K44","K45",
+                                "K46","K47","K48","K49")
+  
+  df_cu_rs$surv.perc <- df_cu_rs$surv*20 # Calculate percentages for survival plants
+  rm(factors)
+  # Data sets with without growth reducing composts/lab errors
+  df_cp_red = df_cp %>% filter(treatment != "K4" & treatment !="K6" & treatment != "K10" & treatment !="K17")
+  df_cp_red$treatment <-droplevels(df_cp_red$treatment)
+  df_cp_red_K = df_cp_red[!grepl("S", df_cp_red$treatment),] # discard peat substrate
+
+  df_cu_gu_red = df_cu_gu %>% filter(treatment != "K10")
+  df_cu_gu_red$treatment <-droplevels(df_cu_gu_red$treatment)
+  df_cu_gu_red_K = df_cu_gu_red[!grepl("S", df_cu_gu_red$treatment),] # discard peat substrate
+  
+  df_cu_rs_red = df_cu_rs %>% filter(treatment != "K27" & treatment != "K37")
+  df_cu_rs_red$treatment <-droplevels(df_cu_rs_red$treatment)
+  df_cu_rs_red_K = df_cu_rs_red[!grepl("S", df_cu_rs_red$treatment),] # discard peat substrate
+  
+  # Load data for normal distribution data
+  normal.dist <-read.csv(file = "Bioassay_normal_distribution_filled.csv", sep =",")
+  normal.dist$X <-NULL
+  # Change transformation to actual formula
+  normal.dist <- normal.dist %>% mutate(
+    formula = case_when(
+      transformation == "none" ~ "y ~ x",
+      transformation =="log+1" ~ "log(y+1) ~x",
+      transformation == "sqrt" ~ "sqrt(y) ~x"))
+  
+  # Load meta data
+  #df_all <-read.csv("../compost_meta_ds_gp.csv", header = TRUE, sep = ";")
+  df_all <-read.csv("../compost_meta_ds_gp_selection2.csv", header = TRUE, sep = ";")
+  df_BLW1 <-subset(df_all, project == 1)
+  df_BLW2 <-subset(df_all, project == 3)
+  df_BLW2$batch <-as.factor(df_BLW2$batch) # change to factor
+  # PEAT
+  Std.meta <-read.csv("../Std_meta_ds_gp.csv", header = TRUE, sep = ";")
+  # compost to exclude
+  compost.exclude = c("K6","K10","K17","K27","K37")
+  factor.category <- c("site", "company", "comp.system")  # categorical factors
+  factor.continous <-c( "DS",  "max_WHC", "pH", "sal", "OD550","NO3","NH4",
+                        "Nmin","NO3.Nmin","PO4","Ntot", "Ctot","Corg","Corg.N", "basal","FDA")
+  factor.bioassay <- c("rel.cp","gp.cp","biomass.cp", "bca.cp","ratio.cp","rank.cp","rank.overall.cp",
+                       "biomass.cu.gu","rel.cu.gu", "surv.cu.gu", "bca.cu.gu", "ratio.cu.gu", "avg.cu.gu",
+                       "gp.cu.gu", "rank.cu.gu", "rank.overall.cu.gu",
+                       "biomass.cu.rs", "rel.cu.rs", "surv.cu.rs", "bca.cu.rs", "ratio.cu.rs", "avg.cu.rs",
+                       "gp.cu.rs", "rank.cu.rs", "rank.overall.cu.rs")
+  factor.site <- c("age",  "plant.content", "soil.content", "max.temp")
+  
+  df_BLW2.r = df_BLW2 %>% filter(!treatment %in% compost.exclude)
+  
+  # read Compost_ID 02.02.24
+  
+  compost_ID <- read.csv(file ="../Key_treatment_compostID.csv", sep= ";")
+  compost_ID$treatment = as.factor(compost_ID$treatment)
+  compost_ID$compost_ID = as.factor(compost_ID$compost_ID)
+  compost_ID$site_ID = as.factor(compost_ID$site_ID)
+  compost_ID <- compost_ID %>% filter(!treatment %in% compost.exclude)
+  
+  graphic.style = theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust= 1, size =14),
+                        legend.position = "right",
+                        axis.text.y = element_text(size =16),
+                        axis.title.y = element_text(size=16),
+                        axis.ticks.y = element_line(colour = "lightgrey"),
+                        axis.line = element_line(colour = "black"),
+                        panel.grid.major.y = element_line(colour ="lightgrey"),
+                        panel.grid.major.x= element_blank(),
+                        panel.grid.minor = element_blank(),
+                        panel.border = element_blank(),
+                        panel.background = element_rect(fill ="white", colour ="white"))
+  
+  rm(mypalette, level, levels_to_relevel)
+##  0.2 Functions ----------------
+  
+  # Functions from external file
+  source("../20230227_Bioassays_funct.R") # Loading Functions
+  
+  # Function: Transform characters into single letters with [] and seperated by |
+  transform_characters <- function(text) {
+    unique_chars <- unique(strsplit(text, "")[[1]])
+    transformed_text <- paste0("[", paste(unique_chars, collapse = "]|["), "]")
+    return(transformed_text)
+  }
+  
+  # Function: boxplot with asterix
+  plot_box_ast = function(data_sum_all, data.test, color.code, variable, y.text) {
+    
+    # Create column with stars for composts that are significantly different from the peat substrate
+    STD = data_sum_all[grepl("S", data_sum_all$x),]$letters %>% sapply( transform_characters)
+    data_sum_all <- data_sum_all %>%
+      mutate(sig = case_when(
+        batch == "1" ~ !grepl(STD[1], data_sum_all$letters),
+        batch == "2" ~ !grepl(STD[2], data_sum_all$letters),
+        batch == "3" ~ !grepl(STD[3], data_sum_all$letters),
+        batch == "4" ~ !grepl(STD[4], data_sum_all$letters)
+      ))  %>% mutate(sig = ifelse(sig, "*", ""))
+    
+    data.test$variable = variable
+    data.test$treatment <- factor(data.test$treatment, levels = levels(data_sum_all$x))
+    value_max = data.test %>% group_by(treatment) %>% dplyr::summarize(max_value = max(variable),
+                                                                       quantile = quantile(variable, probs = 0.75),
+                                                                       batch = mean(batch))
+    value_max$batch <- as.factor(value_max$batch)
+    labelling <- list(
+      '1'="May 2022",
+      '2'="July 2022",
+      '3'="September 2022",
+      '4'="May 2023"
+    )
+    batch_labeller <- function(variable,value){
+      return(labelling[value])
+    }
+    plot = data.test %>%
+      ggplot( aes(x = treatment, y = variable)) +
+      geom_boxplot(position = position_dodge(width = 0.9), width=0.8, fill = color.code, outlier.size = 0.8) +
+      background_pr+
+      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust= 1, size =10), axis.title = element_text(size =12),
+            legend.position = "none", ) +labs ( x = "", y = y.text )+
+      theme(axis.line = element_line(colour = "black"),
+            panel.grid.major.x = element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.border = element_blank(),
+            panel.background = element_blank()) +
+      facet_grid(.~batch, scales= "free", switch = "x", space ="free_x", labeller = batch_labeller)+   theme(strip.placement = "outside", strip.text.x = element_text(size=11))+ geom_text(data = value_max, aes(x=treatment, y = 1 + quantile, label = data_sum_all$sig), vjust=0, size= 5, colour ="red")
+  }
+  
+  # Function: select batch concentration
+  batch.select.fun = function(data, batch.select){
+    data %>%
+      filter(paste(batch, conc) %in% paste(batch.select$batch, batch.select$conc))
+  }
+  
+  sig.differences = function(x){
+    significance <- ifelse(x < 0.001, "***",
+                           ifelse(x < 0.01, "**",
+                                  ifelse(x < 0.05, "*",
+                                         ifelse(x < 0.1, ".", " "))))
+    print(significance)
+  }
+
+# 1 Setting up meta.file (not necessary to load)--------
+##  1.1 Ranking----------------
+  # Ranking is based on conc selection II
+  conc.cress.select = c(rep(0.45,4))
+  conc.cu.gu.select = c(0.45, 0.45, 1.35, 1.35)
+  conc.cu.rs.select = c(1.4, 0.8, 0.8, 0.8)
+  # G. - cress
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = conc.cress.select)
+  data.test = batch.select.fun(df_cp_red_K,batch.select)
+  
+  list <-list()
+  for (i in 1:4) {
+    data = data.test %>% filter(batch == i) %>% group_by(treatment) %>% summarise(rel = mean(rel))
+    data$rank.cp = rank(-data$rel)
+    list[[i]] = data
+  }
+  rank.cp = rbind(list[[1]], list[[2]], list[[3]], list[[4]])
+  rank.cp$rank.overall.cp = rank(-rank.cp$rel)
+  
+  # G. - cucumber
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = conc.cu.gu.select)
+  data.test = batch.select.fun(df_cu_gu_red_K,batch.select)
+  
+  list <-list()
+  for (i in 1:4) {
+    data = data.test %>% filter(batch == i) %>% group_by(treatment) %>% summarise(surv = mean(surv))
+    data$rank.cu.gu = rank(-data$surv)
+    list[[i]] = data
+  }
+  rank.cu.gu = rbind(list[[1]], list[[2]], list[[3]], list[[4]])
+  rank.cu.gu$rank.overall.cu.gu = rank(-rank.cu.gu$surv)
+  
+  # R. solani - cucumber
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = conc.cu.rs.select)
+  data.test = batch.select.fun(df_cu_rs_red_K ,batch.select)
+  
+  list <-list()
+  for (i in 1:4) {
+    data = data.test %>% filter(batch == i) %>% group_by(treatment) %>% summarise(surv = mean(surv))
+    data$rank.cu.rs = rank(-data$surv)
+    list[[i]] = data
+  }
+  rank.cu.rs = rbind(list[[1]], list[[2]], list[[3]], list[[4]])
+  rank.cu.rs$rank.overall.cu.rs = rank(-rank.cu.rs$surv)
+  
+  rm(data.test, data, i, list, batch.select )
+##  1.2 Data selection bioassays-------------
+  # Globisporanigum-cress
+  df_cp$dsrez = as.numeric(df_cp$dsrez)
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = conc.cress.select)
+  data_sum_cp <- batch.select.fun(df_cp, batch.select) %>% group_by(treatment) %>%
+    summarise(biomass.cp = mean(biomass),
+              rel.cp = mean(rel),
+              bca.cp = mean(dsrez),
+              ratio.cp = mean(ratio))
+  data_sum_cp$gp.cp <-df_cp[df_cp$conc == 0,] %>% group_by(treatment) %>% summarise(gp.cp = mean(gp)) %>% pull(gp.cp) # adding growth promotion
+  
+  data_sum_cp = merge(data_sum_cp, rank.cp, by = "treatment", all=TRUE) # add rank
+  data_sum_cp$rel = NULL
+  
+  # Globisporanigum-cucumber
+  df_cu_gu$dsrez <- as.numeric(df_cu_gu$dsrez)
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = conc.cu.gu.select)
+  data_sum_cu_gu = batch.select.fun(df_cu_gu, batch.select) %>% group_by(treatment) %>%
+    summarise(biomass.cu.gu = mean(biomass),
+              rel.cu.gu = mean(rel),
+              surv.cu.gu = mean(surv.perc),
+              ratio.cu.gu = mean(ratio),
+              bca.cu.gu = mean(dsrez),
+              avg.cu.gu = mean(avgplant))
+  data_sum_cu_gu$gp.cu.gu <-df_cu_gu[df_cu_gu$conc == 0,] %>% group_by(treatment) %>% summarise(gp = mean(gp)) %>% pull(gp)
+  data_sum_cu_gu$avg.cu.gu.con <- df_cu_gu[df_cu_gu$conc == 0,] %>% group_by(treatment) %>% summarise(avg = mean(avgplant)) %>% pull(avg)
+  
+  data_sum_cu_gu = merge(data_sum_cu_gu, rank.cu.gu, by = "treatment", all=TRUE) # add rank
+  data_sum_cu_gu$surv = NULL
+  
+  # Rhizotonia-cucumber
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = conc.cu.rs.select)
+  df_cu_rs$dsrez <- as.numeric(df_cu_rs$dsrez)
+  data_sum_cu_rs = batch.select.fun(df_cu_rs, batch.select) %>% group_by(treatment) %>%
+    summarise(biomass.cu.rs = mean(biomass),
+              rel.cu.rs = mean(rel),
+              surv.cu.rs = mean(surv),
+              bca.cu.rs = mean(dsrez),
+              ratio.cu.rs = mean(ratio),
+              avg.cu.rs = mean(avgplant))
+  data_sum_cu_rs$gp.cu.rs <-df_cu_rs[df_cu_rs$conc == 0,] %>% group_by(treatment) %>% summarise(gp = mean(gp)) %>% pull(gp)
+  data_sum_cu_rs$avg.cu.rs.con <- df_cu_rs[df_cu_rs$conc == 0,] %>% group_by(treatment) %>% summarise(avg = mean(avgplant)) %>% pull(avg)
+  
+  data_sum_cu_rs = merge(data_sum_cu_rs, rank.cu.rs, by = "treatment", all=TRUE) # add rank
+  data_sum_cu_rs$surv = NULL
+  
+  # MERGE data files
+  df_ds_gp_cu_avg <-merge(data_sum_cu_gu, data_sum_cu_rs, by = "treatment", all= TRUE) # First merge the two cucumber experiments
+  df_ds_gp_avg <-merge(data_sum_cp, df_ds_gp_cu_avg, by ="treatment", all =TRUE) # Merge with the cress
+  
+  rm(data_sum_cp, data_sum_cu_gu, data_sum_cu_rs, df_ds_gp_cu_avg)
+  
+##  1.3 Load meta data------
+  # Disease assays previous project
+  data_ds_BLW1 <- read.csv("../data_ds_17_compost_BLW1.csv", header= TRUE, sep = ";")
+  data_ds_BLW1 <-data_ds_BLW1[,2:4]
+  data_ds_BLW1$substrate <- as.factor(data_ds_BLW1$substrate)
+  colnames(data_ds_BLW1) <- c("treatment", "rel.cp", "gp.cp")
+  
+  # Meta data compost BLW 1 and BLW2 2022
+  comp.meta <-read.csv("../Compost_characteristics_for_analysis_2022.csv", header = TRUE, sep = ";")
+  names(comp.meta)[names(comp.meta) == 'ID'] <- 'treatment'
+  
+  # Select only BLW2 K6-K31 (project 3, 43 composts)
+  comp.meta.BLW2 <- comp.meta[comp.meta$project == 3 & comp.meta$type == "K",]
+  # Select BLW 1 (project 1, 17 composts)
+  comp.meta.BLW1 <- comp.meta[comp.meta$project == 1,]
+  
+  # Basal respiration and FDA BLW2 K6-K31
+  df.basal.FDA.avg <-read.csv("../20230815_Resp_K6_K49_avg.csv", header = TRUE, sep = ";") # Std is automatically deleted when merging
+  
+  # BLW 1
+  df_cor_BLW1 = merge(comp.meta.BLW1, data_ds_BLW1, by = "treatment")
+  
+  # BLW 2
+  comp.meta.resp.BLW2 = merge(comp.meta.BLW2, df.basal.FDA.avg, by = "treatment") 
+  df_cor_BLW2 = merge(comp.meta.resp.BLW2, df_ds_gp_avg, bye = "treatment") # Final data.frame for correlation analysis
+  # BLW 1 & BLW 2
+  df_all = bind_rows(df_cor_BLW1, df_cor_BLW2) # binds the two data.frame together
+  #write.csv(df_all, "../compost_meta_ds_gp_selection2.csv", row.names=FALSE)
+##  1.4 Peat substrate-----
+  Std.meta = merge(comp.meta[comp.meta$type == "S",], df_ds_gp_avg[grep("S",df_ds_gp_avg$treatment),], by = "treatment", all =TRUE )
+  Std.meta <-Std.meta[, colSums(is.na(Std.meta)) != nrow(Std.meta)] # delete all the columns in which there is all NA
+  Std.meta = Std.meta[,-which(names(Std.meta) %in% c("project","type", "comp.system", "bca.cp", "ratio.cp", "gp.cp", "ratio.cu.gu", "gp.cu.gu", "bca.cu.rs", "ratio.cu.rs", "gp.cu.rs" ))]
+  #write.csv(format(Std.meta, digits =2, nsmall =2) , "../Std_meta_ds_gp.csv")
+  
+  rm(batch.select,data_ds_BLW1, comp.meta, comp.meta.BLW2, comp.meta.BLW1, df.basal.FDA.avg, df_cor_BLW1,
+     comp.meta.resp.BLW2, df_cor_BLW2, rank.cu.gu, rank.cp, rank.cu.rs, df_ds_gp_avg, level, levels_to_relevel)
+# 2 Bioassay----------
+##  2.1 G. ultimum -cress---------
+###     Growth promotion-----------
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0,4)))
+  data.nm = batch.select.fun(normal.dist, batch.select) %>% filter(plant.pathogen == "globi-cress",
+                                                                 variable == "gp")
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cp %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$gp, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cp, batch.select)
+  
+  color.code = c( rep("grey85",12),  rep("grey64", 11), rep("grey44", 12),  rep("grey24",12))
+  y.text <- "growth promotion \n [%]"
+  
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$gp, y.text)
+  plot + scale_y_continuous(limits = c(-75, 160), breaks = seq(-75, 160, by = 10))+
+    geom_hline(aes(yintercept=0), colour="#990000")
+  #ggsave("Figures_all_conc/G.ultimum_cress/cress_biomass_box_gp.png", height = 5, width = 14)
+  
+  # For 2D- plot later
+  STD = data_sum_all[grepl("S", data_sum_all$x),]$letters %>% sapply( transform_characters)
+  data_sum_all <- data_sum_all %>%
+    mutate(sig = case_when(
+      batch == "1" ~ !grepl(STD[1], data_sum_all$letters),
+      batch == "2" ~ !grepl(STD[2], data_sum_all$letters),
+      batch == "3" ~ !grepl(STD[3], data_sum_all$letters),
+      batch == "4" ~ !grepl(STD[4], data_sum_all$letters)
+    ))  %>% mutate(sig = ifelse(sig, 1, 0))
+  sig.gp.cp = data_sum_all[data_sum_all$sig ==1,]$x
+  rm(STD, data_sum_all)
+  
+###     Biomass----------
+  # biomass 0.45
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0.45,4)))
+  # biomass 1.35
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(1.35,4)))
+  
+  data.nm = batch.select.fun(normal.dist, batch.select) %>% filter(plant.pathogen == "globi-cress",
+                                                                   variable == "biomass")
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cp_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$biomass, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cp_red, batch.select)
+  color.code = c("black", rep("grey85",8), "black", rep("grey64", 9), "black", rep("grey44", 11), "black",  rep("grey24",11))
+  y.text <- "Biomass \n g"
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$biomass, y.text)
+  plot + scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, by = 0.5) )
+  
+  #ggsave("Figures_all_conc/G.ultimum_cress/cress_biomass_pub_box_0_45.png", height = 5, width = 14)
+  #ggsave("Figures_all_conc/G.ultimum_cress/cress_biomass_pub_box_1_35.png", height = 5, width = 14)
+
+###     Relative biomass-----------
+  #### NOTE: Load only one of the batch.select lines
+  # 0.15
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0.15,3), 0.45))
+  # 0.45
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0.45,4)))
+  # 1.35
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(1.35,4)))
+  #### NOTE
+  
+  data.nm = batch.select.fun(normal.dist, batch.select) %>% filter(plant.pathogen == "globi-cress",
+                                                                   variable == "rel")
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cp_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$rel, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cp_red, batch.select)
+  
+  color.code = c("black", rep("grey85",8), "black", rep("grey64", 9), "black", rep("grey44", 11), "black",  rep("grey24",11))
+  y.text <- "Relative biomass \n [%]"
+  
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$rel, y.text)
+  plot + scale_y_continuous(limits = c(0, 140), breaks = seq(0, 140, by = 10) )
+  
+  #ggsave("Figures_all_conc/G.ultimum_cress/cress_rel_pub_box_0_15.png", height = 5, width = 14)
+  #ggsave("Figures_all_conc/G.ultimum_cress/cress_rel_pub_box_0_45.png", height = 5, width = 14)
+  #ggsave("Figures_all_conc/G.ultimum_cress/cress_rel_pub_box_1_35.png", height = 5, width = 14)
+
+###     Mixed concentrations --------------
+  #batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(1.35, 0.45, 1.35, 1.35))
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0.45,4)))
+  data.nm = batch.select.fun(normal.dist, batch.select) %>% filter(plant.pathogen == "globi-cress",
+                                                                   variable == "rel")
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cp_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$rel, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cp_red, batch.select)
+  y.text <- "Relative biomass \n [%]"
+  
+  # Plot ordered by batch
+  #color.code = c("black", rep("grey85",8), "black", rep("grey64", 9), "black", rep("grey44", 11), "black",  rep("grey24",11))
+  #plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$rel, y.text)
+  #plot + scale_y_continuous(limits = c(0, 140), breaks = seq(0, 140, by = 10) )
+  #ggsave("Figures_all_conc/G.ultimum_cress/cress_rel_pub_box_mixed_selection1.png", height = 5, width = 14)
+  #ggsave("Figures_all_conc/G.ultimum_cress/cress_rel_pub_box_mixed_selection2.png", height = 5, width = 14)
+  
+  # For 2D- plot later & significant differences indicator
+  STD = data_sum_all[grepl("S", data_sum_all$x),]$letters %>% sapply( transform_characters)
+  data_sum_all <- data_sum_all %>%
+    mutate(sig = case_when(
+      batch == "1" ~ !grepl(STD[1], data_sum_all$letters),
+      batch == "2" ~ !grepl(STD[2], data_sum_all$letters),
+      batch == "3" ~ !grepl(STD[3], data_sum_all$letters),
+      batch == "4" ~ !grepl(STD[4], data_sum_all$letters)
+    ))  %>% mutate(sig = ifelse(sig, 1, 0))
+  sig.rel.cp = data_sum_all[data_sum_all$sig ==1,]$x
+ data_sum_all$sig =ifelse(data_sum_all$sig ==1, "*", "")
+  
+ 
+  # Ordered by mean 
+ 
+  #data_sum_all = data_sum_all[!grepl("S", data_sum_all$x),]
+  data_sum_all = data_sum_all %>% filter(! x %in% compost.exclude)
+  data_sum_all = data_sum_all[order(data_sum_all$mean),]
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x))
+  
+  data.test$variable = data.test$rel
+  #data.test <- data.test[!grepl("S", data.test$treatment),]
+  data.test = data.test %>% filter(!treatment %in% compost.exclude)
+  data.test$treatment <- factor(data.test$treatment, levels = levels(data_sum_all$x))
+  
+  value_max = data.test %>% group_by(treatment) %>% dplyr::summarize(max_value = max(variable),
+                                                                     quantile = quantile(variable, probs = 0.75),
+                                                                     batch = mean(batch))
+  value_max$batch <- as.factor(value_max$batch)
+  
+  # Boxplot colored by batch
+  data.test %>%
+    ggplot( aes(x = treatment, y = variable, fill= factor(batch))) +
+    geom_boxplot(position = position_dodge(width = 0.9), width=0.8, outlier.size = 0.8) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust= 1, size =10), axis.title = element_text(size =12),
+          legend.position = "bottom", ) +labs ( x = "", y = y.text )+
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major.x = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank())+
+    theme(strip.placement = "outside", strip.text.x = element_text(size=11))+
+    scale_fill_discrete(name = "Batch")+
+    geom_text(data = value_max, aes(x=treatment, y = 1 + quantile, label = data_sum_all$sig), vjust=0, size= 5, colour ="red")+
+    scale_y_continuous(limits = c(0, 140), breaks = seq(0, 140, by = 10) )
+    #scale_y_continuous(limits = c(0, 110), breaks = seq(0, 110, by = 10) )
+  
+  #ggsave("Figures_all_conc/G.ultimum_cress/Selection_1/cress_gu_rel_mixed_batches_together_selection1.png", height = 6, width = 14)
+  #ggsave("Figures_all_conc/G.ultimum_cress/cress_gu_rel_mixed_batches_together_selection2.png", height = 6, width = 14)
+  
+  # Adapted version for publication
+ 
+  color.fill = data.test %>% group_by(treatment) %>% dplyr::summarise(mean = mean(rel)) %>%
+   arrange(mean) %>% mutate(fill_color = ifelse(grepl("^S", treatment), "lightsalmon", "antiquewhite")) %>%
+   pull(fill_color) 
+ 
+  # Adaptions for new labeling
+  order_treatment = compost_ID[match(levels(data.test$treatment), compost_ID$treatment), "compost_ID"]
+  data = merge(data.test, compost_ID[, c("treatment", "site_ID")], by ="treatment")
+  site.colors =  c("#81d4fa", "#01579b", "#ffecb3", "#e65100","#b39ddb","#ff9800", "#0288d1", "lightgrey")
+
+  # Option with boxplot
+   data %>%
+    ggplot(aes(x = treatment, y = variable)) +
+    geom_boxplot(aes(fill = site_ID), position = position_dodge(width = 0.9), width= 0.8, outlier.size = 0.8,
+                outlier.shape = NA, coef =0) +
+    #stat_summary(fun=mean, geom='point', shape=3, size=2, colour ="black") +
+    labs ( x = "", y = y.text)+
+    graphic.style +
+    theme(strip.placement = "outside", strip.text.x = element_text(size=16))+
+    scale_fill_manual(name="Substrate\nOrigin", values = site.colors)+
+    geom_jitter(width=0.05,alpha = 0.4, shape =16, size=1)+
+    scale_x_discrete(labels= order_treatment)+
+    geom_text(data = value_max, aes(x=treatment, y = 10 + quantile, label = data_sum_all$sig), vjust=0, size= 7, colour ="darkred")+
+    scale_y_continuous(limits = c(0, 140), breaks = seq(0, 140, by = 20))
+  
+  #ggsave(filename="Figures_all_conc/Publication1/Gu_cress_rel_boxplot_points.png", height =6, width = 14)
+  #ggsave(filename="Figures_all_conc/Publication1/Gu_cress_rel_boxplot_points_peat.png", height =6, width = 14)
+  # ggsave(filename="Figures_all_conc/Publication1/Gu_cress_rel_boxplot_points_peat_colored.png", height =6, width = 14)
+   
+  rm(STD, data_sum_all)
+  
+  # Option with standardabweichung & mean -> will not be used
+  #data.test %>%
+  #  ggplot(aes(x = treatment, y = variable)) +
+  #  stat_summary(fun.y = mean,
+  #              fun.ymin = function(x) mean(x) - sd(x), 
+  #               fun.ymax = function(x) mean(x) + sd(x), 
+  #               geom = "crossbar", shape=3, size=1, linewidth =0.3, fill = color.fill) +
+  #  labs ( x = "", y = y.text)+
+  #  graphic.style +
+  #  theme(strip.placement = "outside", strip.text.x = element_text(size=16))+
+  #  geom_jitter(width=0.1,alpha = 0.4, shape =16)+
+  #  geom_text(data = value_max, aes(x=treatment, y = 20 + quantile, label = data_sum_all$sig), vjust=0, size= 7, colour ="red")+
+  #  scale_y_continuous(limits = c(0, 140), breaks = seq(0, 140, by = 10))
+  #ggsave(filename="Figures_all_conc/Publication1/Gu_cress_rel_boxplot_points_peat_mean_std.png", height =6, width = 14)
+  
+  rm(STD, data_sum_all)
+###     Ratio mixed concentrations----
+  #batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(1.35, 0.45, 1.35, 1.35)) # Selection 1
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0.45,4))) # Selection 2
+  data.nm = batch.select.fun(normal.dist, batch.select) %>% filter(plant.pathogen == "globi-cress",
+                                                                   variable == "rel") # ratio nm does not exist
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cp_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$ratio, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cp_red, batch.select)
+  color.code = c("black", rep("grey85",8), "black", rep("grey64", 9), "black", rep("grey44", 11), "black",  rep("grey24",11))
+  y.text <- "Ratio"
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$ratio, y.text)
+  plot + scale_y_continuous(limits = c(0, 6), breaks = seq(0, 6, by = 0.5) )
+  plot + scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, by = 0.5) )
+  #ggsave("Figures_all_conc/G.ultimum_cress/cress_ratio_mixed_selection1.png", height = 5, width = 14)
+  #ggsave("Figures_all_conc/G.ultimum_cress/cress_ratio_mixed_selection2.png", height = 5, width = 14)
+
+  # Ordered overall (load until y.text before)
+  STD = data_sum_all[grepl("S", data_sum_all$x),]$letters %>% sapply( transform_characters)
+  data_sum_all <- data_sum_all %>%
+    mutate(sig = case_when(
+      batch == "1" ~ !grepl(STD[1], data_sum_all$letters),
+      batch == "2" ~ !grepl(STD[2], data_sum_all$letters),
+      batch == "3" ~ !grepl(STD[3], data_sum_all$letters),
+      batch == "4" ~ !grepl(STD[4], data_sum_all$letters)
+    ))  %>% mutate(sig = ifelse(sig, "*", ""))
+  
+  data_sum_all = data_sum_all[!grepl("S", data_sum_all$x),]
+  data_sum_all = data_sum_all[order(data_sum_all$mean),]
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x))
+  
+  data.test$variable = data.test$ratio
+  data.test <- data.test[!grepl("S", data.test$treatment),]
+  data.test$treatment <- factor(data.test$treatment, levels = levels(data_sum_all$x))
+
+  value_max = data.test %>% group_by(treatment) %>% dplyr::summarize(max_value = max(variable),
+                                                                     quantile = quantile(variable, probs = 0.75),
+                                                                     batch = mean(batch))
+  value_max$batch <- as.factor(value_max$batch)
+  
+  data.test %>%
+    ggplot( aes(x = treatment, y = variable, fill= factor(batch))) +
+    geom_boxplot(position = position_dodge(width = 0.9), width=0.8, outlier.size = 0.8) +
+    background_pr+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust= 1, size =10), axis.title = element_text(size =12),
+          legend.position = "bottom", ) +labs ( x = "", y = y.text )+
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major.x = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank())+
+    theme(strip.placement = "outside", strip.text.x = element_text(size=11))+
+    scale_fill_discrete(name = "Batch")+
+    geom_text(data = value_max, aes(x=treatment, y = 1 + quantile, label = data_sum_all$sig), vjust=0, size= 5, colour ="red")+
+    scale_y_continuous(limits = c(0, 5.5), breaks = seq(0, 5.5, by = 0.5) )
+    #scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, by = 1) )
+  
+  #ggsave("Figures_all_conc/G.ultimum_cress/Selection_1/cress_gu_ratio_mixed_batches_together_selection1.png", height = 6, width = 14)
+  #ggsave("Figures_all_conc/G.ultimum_cress/cress_gu_ratio_mixed_batches_together_selection2.png", height = 6, width = 14)
+
+###     Correlations----
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0.45,4)))
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(1.35, 0.45, 1.35, 1.35))
+  # Concentrations
+  # high: 0.45 and 1.35
+  par(mfrow =c(2,2))
+  for (i in 1:4) {
+    data1 =df_cp_red_K %>% filter(batch == i, conc == 0.45) %>% group_by(treatment, conc) %>% summarise(rel = mean(rel)) %>% select(treatment, conc, rel)
+    data2 =df_cp_red_K %>% filter(batch == i, conc == 1.35) %>% group_by(treatment, conc) %>% summarise(rel = mean(rel)) %>% select(treatment, conc, rel)
+    print(shapiro.test(data1$rel))
+    print(shapiro.test(data2$rel))
+    cor =cor.test(data1$rel, data2$rel, method= "pearson")
+    plot(data1$rel, data2$rel, col="red")
+    mtext(paste(i," cor = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  }
+  # low 0.15 and 0.45
+  for (i in 1:3) {
+    data1 =df_cp_red_K %>% filter(batch == i, conc == 0.15) %>% group_by(treatment, conc) %>% summarise(rel = mean(rel)) %>% select(treatment, conc, rel)
+    data2 =df_cp_red_K %>% filter(batch == i, conc == 0.45) %>% group_by(treatment, conc) %>% summarise(rel = mean(rel)) %>% select(treatment, conc, rel)
+    cor =cor.test(data1$rel, data2$rel, method= "pearson")
+    print(shapiro.test(data1$rel))
+    print(shapiro.test(data2$rel))
+    plot(data1$rel, data2$rel, col="red")
+    mtext(paste(i," cor = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  }
+  dev.off()
+  # all batches together
+  # 0.45 and 1.35
+  data1 =df_cp_red_K %>% filter( conc == 0.45) %>% group_by(treatment) %>% summarise(rel = mean(rel), batch = mean(batch)) %>% select(treatment, rel, batch)
+  data2 =df_cp_red_K %>% filter( conc == 1.35) %>% group_by(treatment) %>% summarise(rel = mean(rel)) %>% select(treatment, rel)
+  cor =cor.test(data1$rel, data2$rel, method= "spearman")
+  shapiro.test(data1$rel);shapiro.test(data2$rel)
+  data = merge(data1, data2, by = "treatment")
+  data$batch  = as.factor(data$batch)
+  
+  ggplot(data, aes(x=rel.x, y= rel.y, col =batch)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("conc 0.45 ~1.35 batch seperate")
+  #ggsave("Figures_all_conc/G.ultimum_cress/Correlations/LM_conc_high_rel_sep.png", height =6 , width = 10)
+  ggplot(data, aes(x=rel.x, y= rel.y)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("conc 0.45 ~1.35 batch together")
+  #ggsave("Figures_all_conc/G.ultimum_cress/Correlations/LM_conc_high_rel.png", height =6 , width = 10)
+  
+  # 0.15 and 0.45
+  data1 =df_cp_red_K %>% filter(conc == 0.15 & batch != 4) %>% group_by(treatment) %>% summarise(rel = mean(rel), batch = mean(batch)) %>% select(treatment, rel, batch)
+  data2 =df_cp_red_K %>% filter( conc == 0.45 & batch != 4) %>% group_by(treatment) %>% summarise(rel = mean(rel)) %>% select(treatment, rel)
+  cor =cor.test(data1$rel, data2$rel, method= "pearson")
+  shapiro.test(data1$rel);shapiro.test(data2$rel)
+  data = merge(data1, data2, by = "treatment")
+  data$batch  = as.factor(data$batch)
+  
+  ggplot(data, aes(x=rel.x, y= rel.y, col =batch)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("conc 0.45 ~1.35 batch seperate")
+  #ggsave("Figures_all_conc/G.ultimum_cress/Correlations/LM_conc_low_rel_sep.png", height =6 , width = 10)
+  ggplot(data, aes(x=rel.x, y= rel.y)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("conc 0.45 ~1.35 batch together")
+  #ggsave("Figures_all_conc/G.ultimum_cress/Correlations/LM_conc_low_rel.png", height =6 , width = 10)
+  
+  # rel (selected conc) & gp
+  data.test = batch.select.fun(df_cp_red_K,batch.select) # all normal distributed
+  par(mfrow =c(2,2))
+  for (i in 1:4) {
+    data1 =data.test %>% filter(batch == i) %>% group_by(treatment) %>% summarise(rel = mean(rel)) %>% select(treatment, rel)
+    data2 =df_cp_red_K %>% filter(batch == i, conc == 0) %>% group_by(treatment) %>% summarise(gp = mean(gp)) %>% select(treatment, gp)
+    cor =cor.test(data1$rel, data2$gp, method= "pearson")
+    print(shapiro.test(data1$rel))
+    print(shapiro.test(data2$gp))
+    plot(data1$rel, data2$gp, col="red")
+    mtext(paste(i," rho = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  }
+  dev.off()
+  # overall correlation 
+  data1 =data.test %>% group_by(treatment) %>% summarise(rel = mean(rel), batch = mean(batch)) %>% select(treatment, rel, batch)
+  data2 =df_cp_red_K %>% filter(conc == 0) %>% group_by(treatment) %>% summarise(gp = mean(gp)) %>% select(treatment, gp)
+  cor =cor.test(data1$rel, data2$gp, method= "pearson")
+  print(shapiro.test(data1$rel)) # normal distributed
+  print(shapiro.test(data2$gp)) # normal distributed
+  data =merge(data1, data2, by = "treatment")
+  data$batch = as.factor(data$batch)
+  
+  # plot
+  ggplot(data, aes(x=rel, y= gp)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+
+    ggtitle(paste0("LM gp ~rel batch together, cor =", round(cor$estimate,3), ", p =", round(cor$p.value,3)))
+  #ggsave("Figures_all_conc/G.ultimum_cress/Correlations/LM_gp_rel_all_selection1.png", height =6 , width = 10)
+  #ggsave("Figures_all_conc/G.ultimum_cress/Correlations/LM_gp_rel_all_selection2.png", height =6 , width = 10)
+  ggplot(data, aes(x=rel, y= gp, color = batch)) + # batches seperatly
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("LM gp ~rel batch sep")
+  #ggsave("Figures_all_conc/G.ultimum_cress/Correlations/LM_gp_rel_sep.png", height =6 , width = 10)
+  rm(data, batch.select, data_sum_all, data.nm, data.test, list, i, level, levels_to_relevel, y.text, color.code, data_sum,
+     cor, data1, data2)
+  
+###     Plots 0.45 & 1.35------
+  
+  # Just for 0.45
+  data1 = df_cp %>% filter(conc == 0.45 & !treatment %in% c("K4", compost.exclude))
+  data.nm = normal.dist %>% filter(plant.pathogen == "globi-cress" & conc == 0.45 & variable == "rel")
+  conc = 0.45
+  
+  # Just for 1.35
+  data1 = df_cp %>% filter(conc == 1.35 & !treatment %in% c("K4", compost.exclude))
+  data.nm = normal.dist %>% filter(plant.pathogen == "globi-cress" & conc == 1.35 & variable == "rel")
+  conc = 1.35
+
+  # For both
+  list = list()
+  for (i in 1:4) {
+    data = data1 %>% filter(batch == i, conc == conc) 
+    TEST_summary(data, data$treatment, data$rel, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  STD = data_sum_all[grepl("S", data_sum_all$x),]$letters %>% sapply( transform_characters)
+  data_sum_all <- data_sum_all %>%
+    mutate(sig = case_when(
+      batch == "1" ~ !grepl(STD[1], data_sum_all$letters),
+      batch == "2" ~ !grepl(STD[2], data_sum_all$letters),
+      batch == "3" ~ !grepl(STD[3], data_sum_all$letters),
+      batch == "4" ~ !grepl(STD[4], data_sum_all$letters)
+    ))  %>% mutate(sig = ifelse(sig, 1, 0))
+  
+  sig.rel.cp.0.45 = data_sum_all[data_sum_all$sig ==1,]$x
+  sig.rel.cp.1.35 = data_sum_all[data_sum_all$sig ==1,]$x
+  
+  # Plot
+  data1 = df_cp %>% filter(conc == 0.45 & !treatment %in% c("K4", compost.exclude)) %>% group_by(treatment) %>% dplyr::summarise(low = mean(rel))
+  data2 = df_cp %>% filter(conc == 1.35 & !treatment %in% c("K4", compost.exclude)) %>% group_by(treatment) %>% dplyr::summarise(high = mean(rel))
+  data = merge(data1, data2, by = "treatment") %>% filter(!treatment %in% c("Std2", "Std3", "Std4", "Std5"))
+  
+  data =data %>% mutate(group = case_when(
+    treatment %in% sig.rel.cp.0.45 & treatment %in% sig.rel.cp.1.35 ~ "A",
+    treatment %in% sig.rel.cp.0.45 & !(treatment %in% sig.rel.cp.1.35) ~"B",
+    !(treatment %in% sig.rel.cp.0.45) & treatment %in% sig.rel.cp.1.35 ~"C",
+    !(treatment %in% sig.rel.cp.0.45) & !(treatment %in% sig.rel.cp.1.35) ~"D"))
+  
+  ggplot(data= data, aes(x= low,  y= high))+ 
+    geom_text_repel(data = data, aes(x = low , y = high , label = treatment, color = group))+
+    scale_color_manual(labels = c("0.45 +1.35", "0.45", "1.35", "none"), values=c("red","blue", "orange","green"))+
+    geom_smooth(method = "lm", se = FALSE)
+  
+  data %>% filter(group =="A") %>% arrange(desc(high)) %>% select(treatment)
+  
+  
+    #ggsave(filename = "Figures_all_conc/G.ultimum_cress/cress_rel_pub_scatter_low_high_concentration.png", height = 8, width =10)
+  
+###     2 D Illustration gp & rel-----
+  data = df_BLW2 %>% filter(!treatment %in% c("K6", "K10", "K17", "K27", "K37"))
+  
+  data =data %>% mutate(group = case_when(
+    treatment %in% sig.rel.cp & treatment %in% sig.gp.cp ~ "A",
+    treatment %in% sig.rel.cp & !(treatment %in% sig.gp.cp) ~"B",
+    !(treatment %in% sig.rel.cp) & treatment %in% sig.gp.cp ~"C",
+    !(treatment %in% sig.rel.cp) & !(treatment %in% sig.gp.cp) ~"D"))
+  
+  ggplot(data= data, aes(x= rel.cp,  y= gp.cp, color = group, label = treatment))+ 
+    geom_text_repel(data = data, aes(x = rel.cp , y = gp.cp , label = treatment, color = group))+
+  scale_color_manual(labels = c("ds + gp", "ds", "gp", "none"), values=c("red","blue", "orange","green"))
+  #ggsave("Figures_all_conc/G.ultimum_cress/cp_2D_plot_ds_gp_selection1.png", height = 8, width =10)
+  #ggsave("Figures_all_conc/G.ultimum_cress/cp_2D_plot_ds_gp_selection2.png", height = 8, width =10)
+  data %>% filter(group =="C") %>% arrange(desc(rel.cp)) %>% select(treatment)
+  rm(data)
+##  2.2 G. ultimum - cucumber-----------------
+###     Growth promotion -------------------
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0,4)))
+  data.nm = batch.select.fun(normal.dist, batch.select) %>% filter(plant.pathogen == "globi-cuc",
+                                                                 variable == "gp")
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cu_gu %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$gp, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cu_gu, batch.select)
+  
+  color.code = c( rep("grey85",11),  rep("grey64", 11), rep("grey44", 12),  rep("grey24",12))
+  y.text <- "grwowth promotion \n [%]"
+  
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$gp, y.text)
+  plot + scale_y_continuous(limits = c(-60, 100), breaks = seq(-60, 100, by = 10))+ geom_hline(aes(yintercept=0), colour="#990000")
+  #ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_box_gp.png", height = 5, width = 14)
+  
+  # For 2D- plot later
+  STD = data_sum_all[grepl("S", data_sum_all$x),]$letters %>% sapply( transform_characters)
+  data_sum_all <- data_sum_all %>%
+    mutate(sig = case_when(
+      batch == "1" ~ !grepl(STD[1], data_sum_all$letters),
+      batch == "2" ~ !grepl(STD[2], data_sum_all$letters),
+      batch == "3" ~ !grepl(STD[3], data_sum_all$letters),
+      batch == "4" ~ !grepl(STD[4], data_sum_all$letters)
+    ))  %>% mutate(sig = ifelse(sig, 1, 0))
+  sig.gp.cu.gu = data_sum_all[data_sum_all$sig ==1,]$x
+  rm(STD, data_sum_all)
+
+###     Biomass----------
+# biomass 0.45
+batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0.45,4)))
+# biomass 1.35
+batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(1.35,4)))
+
+data.nm = batch.select.fun(normal.dist, batch.select) %>% filter(plant.pathogen == "globi-cuc",
+                                                                 variable == "biomass")
+# loop for statistics
+list = list()
+for (i in 1:4) {
+  data = df_cu_gu_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+  TEST_summary(data, data$treatment, data$biomass, i)
+  data_sum$batch <- i
+  list[[i]] <- data_sum%>% arrange(mean)
+}
+# for 0.45
+data =list[[2]]
+list[[2]] = data[c(3,1,2,4:nrow(data)),]
+
+# for 1.35
+data =list[[2]]
+list[[2]] = data[c(2,1,3:nrow(data)),]
+data =list[[4]]
+list[[4]] = data[c(2,1,3:nrow(data)),]
+
+data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+
+# Data selection for plot
+data.test = batch.select.fun(df_cu_gu_red, batch.select)
+color.code = c("black", rep("grey85",9), "black", rep("grey64", 10), "black", rep("grey44", 11), "black",  rep("grey24",11))
+y.text <- "Biomass \n g"
+
+plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$biomass, y.text)
+plot + scale_y_continuous(limits = c(0, 7), breaks = seq(0, 7, by = 0.5) )
+
+#ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_box_biomass_0_45.png", height = 5, width = 14)
+#ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_box_biomass_1_35.png", height = 5, width = 14)
+
+###     Relative biomass-----------
+  #### NOTE: Load only one of the batch.select lines
+  # 0.15
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0.15,3), 0.45))
+  # 0.45
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0.45,4)))
+  # 1.35
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(1.35,4)))
+  #### NOTE
+  data.nm = batch.select.fun(normal.dist, batch.select) %>% filter(plant.pathogen == "globi-cuc",
+                                                                   variable == "rel")
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cu_gu_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$rel, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  # for 0.15
+  data =list[[2]]
+  list[[2]] = data[c(10,1:9,nrow(data)),]
+  data =list[[3]]
+  list[[3]] = data[c(6,1:5,7:nrow(data)),]
+  data =list[[4]]
+  list[[4]] = data[c(3,1:2,4:nrow(data)),]
+  
+  # for 0.45
+  data =list[[2]]
+  list[[2]] = data[c(4,1,2,3,5:nrow(data)),]
+  data =list[[4]]
+  list[[4]] = data[c(3,1,2,4:nrow(data)),]
+  
+  # for 1.35
+  data =list[[2]]
+  list[[2]] = data[c(2,1,3:nrow(data)),]
+  data =list[[4]]
+  list[[4]] = data[c(2,1,3:nrow(data)),]
+  
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cu_gu_red, batch.select)
+  color.code = c("black", rep("grey85",9), "black", rep("grey64", 10), "black", rep("grey44", 11), "black",  rep("grey24",11))
+  y.text <- "Relative biomass \n [%]"
+  
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$rel, y.text)
+  plot + scale_y_continuous(limits = c(0, 140), breaks = seq(0, 140, by = 10) )
+  
+  #ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_box_rel_0_15.png", height = 5, width = 14)
+  #ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_box_rel_0_45.png", height = 5, width = 14)
+  #ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_box_rel_1_35.png", height = 5, width = 14)
+###     Survival rate-------------
+  #### NOTE: Load only one of the batch.select lines
+  # 0.15
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0.15,3), 0.45))
+  # 0.45
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0.45,4)))
+  # 1.35
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(1.35,4)))
+  #### NOTE
+  data.nm = batch.select.fun(normal.dist, batch.select) %>% filter(plant.pathogen == "globi-cuc",
+                                                                   variable == "surv")
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cu_gu_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$surv.perc, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  # for 0.15
+  data =list[[1]]
+  list[[1]] = data[c(2,1,3:nrow(data)),]
+  data =list[[2]]
+  list[[2]] = data[c(5,1:4,6:nrow(data)),]
+  data =list[[4]]
+  list[[4]] = data[c(3,1,2,4:nrow(data)),]
+  
+  # for 0.45
+  data =list[[2]]
+  list[[2]] = data[c(2,1,3:nrow(data)),]
+  data =list[[4]]
+  list[[4]] = data[c(3,1,2,4:nrow(data)),]
+  
+  # for 1.35
+  data =list[[4]]
+  list[[4]] = data[c(2,1,3:nrow(data)),]
+  
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cu_gu_red, batch.select)
+  color.code = c("black", rep("grey85",9), "black", rep("grey64", 10), "black", rep("grey44", 11), "black",  rep("grey24",11))
+  y.text <- "Survival rate \n [%]"
+  
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$surv.perc, y.text)
+  plot + scale_y_continuous(limits = c(0, 110), breaks = seq(0, 110, by = 10) )
+  
+  #ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_box_surv_0_15.png", height = 5, width = 14)
+  #ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_box_surv_0_45.png", height = 5, width = 14)
+  # ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_box_surv_1_35.png", height = 5, width = 14)
+
+###     Mixed concentrations-----
+  # Selection 1
+  #batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(1.35, 0.45, 1.35, 1.35))
+  # Selection 2 
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(0.45, 0.45, 1.35, 1.35))
+  # rel
+  data.nm =normal.dist %>% 
+    filter(plant.pathogen == "globi-cuc",
+           variable == "rel",
+           case_when(
+             batch == 1 ~conc == batch.select[1,2],
+             batch == 2 ~conc == batch.select[2,2],
+             batch == 3 ~conc == batch.select[3,2],
+             batch == 4 ~conc == batch.select[4,2]
+           ))
+  
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cu_gu_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$rel, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  data =list[[2]]
+  list[[2]] = data[c(4,1:3,5:nrow(data)),]
+  data =list[[4]]
+  list[[4]] = data[c(2,1,3:nrow(data)),]
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Select significant composts
+  STD = data_sum_all[grepl("S", data_sum_all$x),]$letters %>% sapply( transform_characters)
+  data_sum_all <- data_sum_all %>%
+    mutate(sig = case_when(
+      batch == "1" ~ !grepl(STD[1], data_sum_all$letters),
+      batch == "2" ~ !grepl(STD[2], data_sum_all$letters),
+      batch == "3" ~ !grepl(STD[3], data_sum_all$letters),
+      batch == "4" ~ !grepl(STD[4], data_sum_all$letters)
+    ))  %>% mutate(sig = ifelse(sig, 1, 0))
+  sig.rel.cu.gu = data_sum_all[data_sum_all$sig ==1,]$x
+  data_sum_all$sig =ifelse(data_sum_all$sig ==1, "*", "")
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cu_gu_red, batch.select)
+  y.text <- "Relative biomass \n [%]"
+  
+  data_sum_all = data_sum_all %>% filter(! x %in% compost.exclude)
+  data_sum_all = data_sum_all[order(data_sum_all$mean),]
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x))
+  
+  data.test$variable = data.test$rel
+  #data.test <- data.test[!grepl("S", data.test$treatment),]
+  data.test = data.test %>% filter(!treatment %in% compost.exclude)
+  data.test$treatment <- factor(data.test$treatment, levels = levels(data_sum_all$x))
+  
+  value_max = data.test %>% group_by(treatment) %>% dplyr::summarize(max_value = max(variable),
+                                                                     quantile = quantile(variable, probs = 0.75),
+                                                                     batch = mean(batch))
+  value_max$batch <- as.factor(value_max$batch)
+  
+  #color.code = c("black", rep("grey85",9), "black", rep("grey64", 10), "black", rep("grey44", 11), "black",  rep("grey24",11))
+  #plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$rel, y.text)
+  #plot + scale_y_continuous(limits = c(0, 140), breaks = seq(0, 140, by = 10) )
+  #ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_box_rel_mixed_selection1.png", height = 5, width = 14)
+  #ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_box_rel_mixed_selection2.png", height = 5, width = 14)
+  
+  # Adaptions for new labeling
+  order_treatment = compost_ID[match(levels(data.test$treatment), compost_ID$treatment), "compost_ID"]
+  data = merge(data.test, compost_ID[, c("treatment", "site_ID")], by ="treatment")
+  site.colors =  c("#81d4fa", "#01579b", "#ffecb3", "#e65100","#b39ddb","#ff9800", "#0288d1", "lightgrey")
+  
+  # Option with boxplot
+  data %>%
+    ggplot(aes(x = treatment, y = variable)) +
+    geom_boxplot(aes(fill = site_ID), position = position_dodge(width = 0.9), width= 0.8, outlier.size = 0.8,
+                 outlier.shape = NA, coef =0) +
+    #stat_summary(fun=mean, geom='point', shape=3, size=2, colour ="black") +
+    labs ( x = "", y = y.text)+
+    graphic.style +
+    theme(strip.placement = "outside", strip.text.x = element_text(size=16))+
+    scale_fill_manual(name="Substrate\nOrigin", values = site.colors)+
+    geom_jitter(width=0.05,alpha = 0.4, shape =16, size=1)+
+    scale_x_discrete(labels= order_treatment)+
+    geom_text(data = value_max, aes(x=treatment, y = 10 + quantile, label = data_sum_all$sig), vjust=0, size= 7, colour ="darkred")+
+    scale_y_continuous(limits = c(0, 140), breaks = seq(0, 140, by = 20))
+  
+  # Surv
+  # Selection 1
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(1.35, 0.45, 1.35, 1.35))
+  # Selection 2 
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(0.45, 0.45, 1.35, 1.35))
+  # rel
+  data.nm =normal.dist %>% 
+    filter(plant.pathogen == "globi-cuc",
+           variable == "surv",
+           case_when(
+             batch == 1 ~conc == batch.select[1,2],
+             batch == 2 ~conc == batch.select[2,2],
+             batch == 3 ~conc == batch.select[3,2],
+             batch == 4 ~conc == batch.select[4,2]
+           ))
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cu_gu_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$surv.perc, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  
+  data =list[[2]]
+  list[[2]] = data[c(2,1,3:nrow(data)),]
+  data =list[[4]]
+  list[[4]] = data[c(2,1,3:nrow(data)),]
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cu_gu_red, batch.select)
+  color.code = c("black", rep("grey85",9), "black", rep("grey64", 10), "black", rep("grey44", 11), "black",  rep("grey24",11))
+  y.text <- "Survival rate \n [%]"
+  
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$surv.perc, y.text)
+  plot + scale_y_continuous(limits = c(0, 110), breaks = seq(0, 110, by = 10) )
+  #ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_box_surv_mixed_selection1.png", height = 5, width = 14)
+  #ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_box_surv_mixed_selection2.png", height = 5, width = 14)
+  
+ 
+  rm(STD, batch.select, data, data_sum, data_sum_all, data.nm, data.test, list, plot, y.text, i, levels, level, levels_to_relevel, color.code)
+  
+###     Ratio mixed concentrations-----
+  # Selection 1
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(1.35, 0.45, 1.35, 1.35))
+  # Selection 2 
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(0.45, 0.45, 1.35, 1.35))
+  # rel
+  data.nm =normal.dist %>% 
+    filter(plant.pathogen == "globi-cuc",
+           variable == "rel",
+           case_when(
+             batch == 1 ~conc == batch.select[1,2],
+             batch == 2 ~conc == batch.select[2,2],
+             batch == 3 ~conc == batch.select[3,2],
+             batch == 4 ~conc == batch.select[4,2]
+           ))
+  
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cu_gu_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$ratio, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  data =list[[2]]
+  list[[2]] = data[c(4,1:3,5:nrow(data)),]
+  data =list[[4]]
+  list[[4]] = data[c(2,1,3:nrow(data)),]
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cu_gu_red, batch.select)
+  color.code = c("black", rep("grey85",9), "black", rep("grey64", 10), "black", rep("grey44", 11), "black",  rep("grey24",11))
+  y.text <- "Ratio"
+  
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$ratio, y.text)
+  plot + scale_y_continuous(limits = c(0, 6), breaks = seq(0, 6, by = 0.5) )
+  plot + scale_y_continuous(limits = c(0, 11), breaks = seq(0, 11, by = 0.5) ) # Selection 1
+  #ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_ratio_mixed_selection1.png", height = 5, width = 14)
+  #ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_ratio_mixed_selection2.png", height = 5, width = 14)
+  
+  # Batches all together order with rising mean
+  
+  STD = data_sum_all[grepl("S", data_sum_all$x),]$letters %>% sapply( transform_characters)
+  data_sum_all <- data_sum_all %>%
+    mutate(sig = case_when(
+      batch == "1" ~ !grepl(STD[1], data_sum_all$letters),
+      batch == "2" ~ !grepl(STD[2], data_sum_all$letters),
+      batch == "3" ~ !grepl(STD[3], data_sum_all$letters),
+      batch == "4" ~ !grepl(STD[4], data_sum_all$letters)
+    ))  %>% mutate(sig = ifelse(sig, "*", ""))
+  
+  data_sum_all = data_sum_all[!grepl("S", data_sum_all$x),]
+  data_sum_all = data_sum_all[order(data_sum_all$mean),]
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x))
+  
+  data.test$variable = data.test$ratio
+
+  data.test <- data.test[!grepl("S", data.test$treatment),]
+  data.test$treatment <- factor(data.test$treatment, levels = levels(data_sum_all$x))
+  value_max = data.test %>% group_by(treatment) %>% dplyr::summarize(max_value = max(variable),
+                                                                     quantile = quantile(variable, probs = 0.75),
+                                                                     batch = mean(batch))
+  value_max$batch <- as.factor(value_max$batch)
+
+  data.test %>%
+    ggplot( aes(x = treatment, y = variable, fill= factor(batch))) +
+    geom_boxplot(position = position_dodge(width = 0.9), width=0.8, outlier.size = 0.8) +
+    background_pr+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust= 1, size =10), axis.title = element_text(size =12),
+          legend.position = "bottom", ) +labs ( x = "", y = y.text )+
+    theme(axis.line = element_line(colour = "black"),
+          panel.grid.major.x = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_blank(),
+          panel.background = element_blank())+
+    theme(strip.placement = "outside", strip.text.x = element_text(size=11))+
+    geom_text(data = value_max, aes(x=treatment, y = 1 + quantile, label = data_sum_all$sig), vjust=0, size= 5, colour ="red")+
+    scale_fill_discrete(name = "Batch")+
+    scale_y_continuous(limits = c(0, 5.5), breaks = seq(0, 5.5, by = 0.5) )
+    #scale_y_continuous(limits = c(0, 11), breaks = seq(0, 11, by = 0.5) ) # Selection1
+  # ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_ratio_mixed_sorted_batch_colored_selection1.png", height = 6, width = 14)
+  # ggsave("Figures_all_conc/G.ultimum_cuc/cuc_gu_ratio_mixed_sorted_batch_colored_selection2.png", height = 6, width = 14)
+###     Correlations------
+  # Disease metrics
+  # rel & surv
+  c = 0.45
+  c = 1.35
+
+  #png(file="Figures_all_conc/G.ultimum_cuc/Cu_gu_cor_surv_rel_conc_low.png")
+  #png(file="Figures_all_conc/G.ultimum_cuc/Cu_gu_cor_surv_rel_conc_high.png")
+  par(mfrow =c(2,2))
+  for (i in 1:4) {
+    data1 =df_cu_gu_red_K %>% filter(batch == i, conc == c) %>% group_by(treatment, conc) %>% summarise(rel = mean(rel)) %>% select(treatment, conc, rel)
+    data2 =df_cu_gu_red_K %>% filter(batch == i, conc == c) %>% group_by(treatment, conc) %>% summarise(surv = mean(surv.perc)) %>% select(treatment, conc, surv)
+    cor =cor.test(data1$rel, data2$surv, method= "pearson")
+    print(shapiro.test(data1$rel)); print(shapiro.test(data2$surv))
+    plot(data1$rel, data2$surv, col="red")
+    mtext(paste(i," cor = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  }
+  #dev.off()
+  
+  # average weight of plant correlation with survival rate?
+  data1 =df_cu_gu_red_K %>% filter(surv !=0)
+  data1$surv = as.factor(data1$surv)
+  ANOVA = aov(avgplant ~surv, data = data1)
+  summary(ANOVA)
+  TUKEY = TukeyHSD(ANOVA)
+  multcompLetters4(ANOVA, TUKEY)
+
+  ggplot(data1, aes(y = avgplant, x = surv))+ geom_boxplot()
+  #ggsave("Figures_all_conc/G.ultimum_cuc/avgweight_surv_all.png")
+  ggplot(data1, aes(y = avgplant, x = surv))+ geom_boxplot()+ facet_grid(.~conc)
+  #ggsave("Figures_all_conc/G.ultimum_cuc/avgweight_surv_conc_sep.png")
+  
+  # Concentrations
+  #rel
+  #png(file="Figures_all_conc/G.ultimum_cuc/Cu_gu_cor_rel_conc_high.png")
+  par(mfrow =c(2,2))
+  # rel high
+  for (i in 1:4) {
+    data1 =df_cu_gu_red_K %>% filter(batch == i, conc == 0.45) %>% group_by(treatment, conc) %>% summarise(rel = mean(rel)) %>% select(treatment, conc, rel)
+    data2 =df_cu_gu_red_K %>% filter(batch == i, conc == 1.35) %>% group_by(treatment, conc) %>% summarise(rel = mean(rel)) %>% select(treatment, conc, rel)
+    cor =cor.test(data1$rel, data2$rel, method= "pearson")
+    print(shapiro.test(data1$rel)); print(shapiro.test(data2$rel))
+    plot(data1$rel, data2$rel, col="red")
+    mtext(paste(i," cor = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  }
+  #dev.off()
+  # rel low
+  #png(file="Figures_all_conc/G.ultimum_cuc/Cu_gu_cor_rel_conc_low.png")
+  par(mfrow =c(2,2))
+  for (i in 1:3) {
+    data1 =df_cu_gu_red_K %>% filter(batch == i, conc == 0.15) %>% group_by(treatment, conc) %>% summarise(rel = mean(rel)) %>% select(treatment, conc, rel)
+    data2 =df_cu_gu_red_K %>% filter(batch == i, conc == 0.45) %>% group_by(treatment, conc) %>% summarise(rel = mean(rel)) %>% select(treatment, conc, rel)
+    cor =cor.test(data1$rel, data2$rel, method= "pearson")
+    print(shapiro.test(data1$rel)); print(shapiro.test(data2$rel))
+    plot(data1$rel, data2$rel, col="red")
+    mtext(paste(i," cor = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  }
+  #dev.off()
+  # surv.perc high
+  # png(file="Figures_all_conc/G.ultimum_cuc/Cu_gu_cor_survper_conc_high.png")
+  par(mfrow =c(2,2))
+  for (i in 1:4) {
+    data1 =df_cu_gu_red_K %>% filter(batch == i, conc == 0.45) %>% group_by(treatment, conc) %>% summarise(surv.perc = mean(surv.perc)) %>% select(treatment, conc, surv.perc)
+    data2 =df_cu_gu_red_K %>% filter(batch == i, conc == 1.35) %>% group_by(treatment, conc) %>% summarise(surv.perc = mean(surv.perc)) %>% select(treatment, conc, surv.perc)
+    cor =cor.test(data1$surv.perc, data2$surv.perc, method= "pearson")
+    print(shapiro.test(data1$surv.perc)); print(shapiro.test(data2$surv.perc))
+    plot(data1$surv.perc, data2$surv.perc, col="red")
+    mtext(paste(i," cor = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  }
+  dev.off()
+  # surv.perc low
+  #png(file="Figures_all_conc/G.ultimum_cuc/Cu_gu_cor_survper_conc_low.png")
+  par(mfrow =c(2,2))
+  for (i in 1:3) {
+    data1 =df_cu_gu_red_K %>% filter(batch == i, conc == 0.15) %>% group_by(treatment, conc) %>% summarise(surv.perc = mean(surv.perc)) %>% select(treatment, conc, surv.perc)
+    data2 =df_cu_gu_red_K %>% filter(batch == i, conc == 0.45) %>% group_by(treatment, conc) %>% summarise(surv.perc = mean(surv.perc)) %>% select(treatment, conc, surv.perc)
+    cor =cor.test(data1$surv.perc, data2$surv.perc, method= "pearson")
+    print(shapiro.test(data1$surv.perc)); print(shapiro.test(data2$surv.perc))
+    plot(data1$surv.perc, data2$surv.perc, col="red")
+    mtext(paste(i," cor = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  } 
+  #dev.off()
+  
+  # all batches together rel
+  # 0.45 & 1.35
+  data1 =df_cu_gu_red_K %>% filter(conc == 0.45) %>% group_by(treatment) %>% summarise(rel = mean(rel), batch = mean(batch)) %>% select(treatment, rel, batch)
+  data2 =df_cu_gu_red_K %>% filter(conc == 1.35) %>% group_by(treatment) %>% summarise(rel = mean(rel)) %>% select(treatment, rel)
+  cor.test(data1$rel, data2$rel, method= "spearman")
+  shapiro.test(data1$rel);shapiro.test(data2$rel)
+  data = merge(data1, data2, by = "treatment")
+  data$batch  = as.factor(data$batch)
+  
+  ggplot(data, aes(x=rel.x, y= rel.y, col =batch)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("conc 0.45 ~1.35 batch seperate")
+  #ggsave("Figures_all_conc/G.ultimum_cuc/LM_conc_high_rel_sep.png", height =6 , width = 10)
+  ggplot(data, aes(x=rel.x, y= rel.y)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("conc 0.45 ~1.35 batch together")
+  #ggsave("Figures_all_conc/G.ultimum_cuc/LM_conc_high_rel.png", height =6 , width = 10)
+  
+  # 0.15 & 0.45
+  data1 =df_cu_gu_red_K %>% filter(conc == 0.15, batch !=4) %>% group_by(treatment) %>% summarise(rel = mean(rel), batch = mean(batch)) %>% select(treatment, rel, batch)
+  data2 =df_cu_gu_red_K %>% filter(conc == 0.45, batch !=4) %>% group_by(treatment) %>% summarise(rel = mean(rel)) %>% select(treatment, rel)
+  cor.test(data1$rel, data2$rel, method= "pearson")
+  shapiro.test(data1$rel);shapiro.test(data2$rel)
+  data = merge(data1, data2, by = "treatment")
+  data$batch  = as.factor(data$batch)
+ 
+  ggplot(data, aes(x=rel.x, y= rel.y, col =batch)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("conc 0.15 ~0.45 batch seperate")
+  #ggsave("Figures_all_conc/G.ultimum_cuc/LM_conc_low_rel_sep.png", height =6 , width = 10)
+  ggplot(data, aes(x=rel.x, y= rel.y)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("onc 0.15 ~0.45 batch together")
+  #ggsave("Figures_all_conc/G.ultimum_cuc/LM_conc_low_rel.png", height =6 , width = 10)
+  
+  # all batches together surv
+  # 0.45 & 1.35
+  data1 =df_cu_gu_red_K %>% filter(conc == 0.45) %>% group_by(treatment) %>% summarise(surv = mean(surv.perc), batch = mean(batch)) %>% select(treatment, surv, batch)
+  data2 =df_cu_gu_red_K %>% filter(conc == 1.35) %>% group_by(treatment) %>% summarise(surv = mean(surv.perc)) %>% select(treatment, surv)
+  cor.test(data1$surv, data2$surv, method= "spearman")
+  shapiro.test(data1$surv);shapiro.test(data2$surv)
+  data = merge(data1, data2, by = "treatment")
+  data$batch  = as.factor(data$batch)
+  
+  ggplot(data, aes(x=surv.x, y= surv.y, col =batch)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("conc 0.45 ~1.35 batch seperate")
+  #ggsave("Figures_all_conc/G.ultimum_cuc/LM_conc_high_surv_sep.png", height =6 , width = 10)
+  ggplot(data, aes(x=surv.x, y= surv.y)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("conc 0.45 ~1.35 batch together")
+  #ggsave("Figures_all_conc/G.ultimum_cuc/LM_conc_high_surv.png", height =6 , width = 10)
+  
+  # 0.15 & 0.45
+  data1 =df_cu_gu_red_K %>% filter(conc == 0.15, batch !=4) %>% group_by(treatment) %>% summarise(surv = mean(surv.perc), batch = mean(batch)) %>% select(treatment, surv, batch)
+  data2 =df_cu_gu_red_K %>% filter(conc == 0.45, batch !=4) %>% group_by(treatment) %>% summarise(surv = mean(surv.perc)) %>% select(treatment, surv)
+  cor.test(data1$surv, data2$surv, method= "spearman")
+  
+  shapiro.test(data1$surv);shapiro.test(data2$surv)
+  data = merge(data1, data2, by = "treatment")
+  data$batch  = as.factor(data$batch)
+  
+  ggplot(data, aes(x=surv.x, y= surv.y, col =batch)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("conc 0.15 ~0.45 batch seperate")
+  #ggsave("Figures_all_conc/G.ultimum_cuc/LM_conc_low_surv_sep.png", height =6 , width = 10)
+  ggplot(data, aes(x=surv.x, y= surv.y)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("onc 0.15 ~0.45 batch together")
+  #ggsave("Figures_all_conc/G.ultimum_cuc/LM_conc_low_surv.png", height =6 , width = 10)
+  
+  # rel & gp
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(1.35, 0.45, 1.35, 1.35)) # Selection1
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(0.45, 0.45, 1.35, 1.35)) # Selection2
+  
+  data.test = batch.select.fun(df_cu_gu_red_K,batch.select) # all normal distributed
+  
+  #png(file="Figures_all_conc/G.ultimum_cuc/Cu_gu_cor_gp_rel.png")
+  par(mfrow =c(2,2))
+  for (i in 1:4) {
+    data1 =data.test %>% filter(batch == i) %>% group_by(treatment) %>% summarise(rel = mean(rel)) %>% select(treatment, rel)
+    data2 =df_cu_gu_red_K %>% filter(batch == i, conc == 0) %>% group_by(treatment) %>% summarise(gp = mean(gp)) %>% select(treatment, gp)
+    cor =cor.test(data1$rel, data2$gp, method= "pearson")
+    print(shapiro.test(data1$rel))
+    print(shapiro.test(data2$gp))
+    plot(data1$rel, data2$gp, col="red")
+    mtext(paste(i," cor = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  }
+  #dev.off()
+  # surv.perc & gp
+  #png(file="Figures_all_conc/G.ultimum_cuc/Cu_gu_cor_gp_surv.png")
+  par(mfrow =c(2,2))
+  for (i in 1:4) {
+    data1 =data.test %>% filter(batch == i) %>% group_by(treatment) %>% summarise(surv = mean(surv.perc)) %>% select(treatment, surv)
+    data2 =df_cu_gu_red_K %>% filter(batch == i, conc == 0) %>% group_by(treatment) %>% summarise(gp = mean(gp)) %>% select(treatment, gp)
+    cor =cor.test(data1$surv, data2$gp, method= "pearson")
+    print(shapiro.test(data1$surv))
+    print(shapiro.test(data2$gp))
+    plot(data1$surv, data2$gp, col="red")
+    mtext(paste(i," cor = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  }
+  #dev.off()
+  
+  # all batches together rel
+  data1 =data.test %>% group_by(treatment) %>% summarise(rel = mean(rel), batch = mean(batch)) %>% select(treatment, rel, batch)
+  data2 =df_cu_gu_red_K %>% filter(conc == 0) %>% group_by(treatment) %>% summarise(gp = mean(gp)) %>% select(treatment, gp)
+  cor =cor.test(data1$rel, data2$gp, method= "pearson")
+  print(shapiro.test(data1$rel)); print(shapiro.test(data2$gp))
+  data =merge(data1, data2, by = "treatment")
+  data$batch = as.factor(data$batch)
+
+  ggplot(data, aes(x=rel, y= gp)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+
+    ggtitle(paste0("LM gp ~rel batch together, cor =", round(cor$estimate,3), ", p = ", round(cor$p.value,3)))
+  #ggsave("Figures_all_conc/G.ultimum_cuc/Correlations/LM_gp_rel_all_selection2.png", height =6 , width = 10)
+  ggplot(data, aes(x=rel, y= gp, color = batch)) + # batches seperatly
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("LM gp ~surv batch sep")
+  #ggsave("Figures_all_conc/G.ultimum_cuc/Correlations/LM_gp_rel_sep_selection2.png", height =6 , width = 10)
+  
+  # surv
+  data1 =data.test %>% group_by(treatment) %>% summarise(surv = mean(surv.perc), batch = mean(batch)) %>% select(treatment, surv, batch)
+  data2 =df_cu_gu_red_K %>% filter(conc == 0) %>% group_by(treatment) %>% summarise(gp = mean(gp)) %>% select(treatment, gp)
+  cor =cor.test(data1$surv, data2$gp, method= "spearman")
+  print(shapiro.test(data1$surv)); print(shapiro.test(data2$gp))
+  data =merge(data1, data2, by = "treatment")
+  data$batch = as.factor(data$batch)
+  
+  ggplot(data, aes(x=surv, y= gp)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+
+    ggtitle(paste0("LM gp ~surv batch together, cor =", round(cor$estimate,3), ", p = ", round(cor$p.value,3)))
+  #ggsave("Figures_all_conc/G.ultimum_cuc/Correlations/LM_gp_surv_all_selection1.png", height =6 , width = 10)
+  #ggsave("Figures_all_conc/G.ultimum_cuc/Correlations/LM_gp_surv_all_selection2.png", height =6 , width = 10)
+  ggplot(data, aes(x=surv, y= gp, color = batch)) + # batches seperatly
+    geom_point(shape=1)+ geom_smooth(method=lm)+
+    ggtitle("LM gp ~surv batch sep")
+  #ggsave("Figures_all_conc/G.ultimum_cuc/Correlations/LM_gp_surv_sep_selection2.png", height =6 , width = 10)
+  #ggsave("Figures_all_conc/G.ultimum_cuc/Correlations/LM_gp_surv_sep_selection1.png", height =6 , width = 10)
+  rm(batch.select, data, cor, data_sum, data_sum_all, data.test, data1, data2, list,
+     data.nm, plot, color.code, conc.level, i, level, levels_to_relevel, y.text)
+###     Plots 0.45 & 1.35-----
+  
+  # Just for 0.45
+  data1 = df_cu_gu %>% filter(conc == 0.45 & !treatment %in% c("K4", compost.exclude))
+  data.nm = normal.dist %>% filter(plant.pathogen == "globi-cuc" & conc == 0.45 & variable == "rel")
+  conc = 0.45
+  
+  # Just for 1.35
+  data1 = df_cu_gu %>% filter(conc == 1.35 & !treatment %in% c("K4", compost.exclude))
+  data.nm = normal.dist %>% filter(plant.pathogen == "globi-cuc" & conc == 1.35 & variable == "rel")
+  conc = 1.35
+  
+  # For both
+  list = list()
+  for (i in 1:4) {
+    data = data1 %>% filter(batch == i, conc == conc) 
+    TEST_summary(data, data$treatment, data$rel, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  STD = data_sum_all[grepl("S", data_sum_all$x),]$letters %>% sapply( transform_characters)
+  data_sum_all <- data_sum_all %>%
+    mutate(sig = case_when(
+      batch == "1" ~ !grepl(STD[1], data_sum_all$letters),
+      batch == "2" ~ !grepl(STD[2], data_sum_all$letters),
+      batch == "3" ~ !grepl(STD[3], data_sum_all$letters),
+      batch == "4" ~ !grepl(STD[4], data_sum_all$letters)
+    ))  %>% mutate(sig = ifelse(sig, 1, 0))
+  
+  sig.rel.cuc.0.45 = data_sum_all[data_sum_all$sig ==1,]$x
+  sig.rel.cuc.1.35 = data_sum_all[data_sum_all$sig ==1,]$x
+  
+  # Plot
+  data1 = df_cu_gu %>% filter(conc == 0.45 & !treatment %in% c("K4", compost.exclude)) %>% group_by(treatment) %>% dplyr::summarise(low = mean(rel))
+  data2 = df_cu_gu %>% filter(conc == 1.35 & !treatment %in% c("K4", compost.exclude)) %>% group_by(treatment) %>% dplyr::summarise(high = mean(rel))
+  data = merge(data1, data2, by = "treatment") %>% filter(!treatment %in% c("Std2", "Std3", "Std4", "Std5"))
+  
+  data =data %>% mutate(group = case_when(
+    treatment %in% sig.rel.cuc.0.45 & treatment %in% sig.rel.cuc.1.35 ~ "A",
+    treatment %in% sig.rel.cuc.0.45 & !(treatment %in% sig.rel.cuc.1.35) ~"B",
+    !(treatment %in% sig.rel.cuc.0.45) & treatment %in% sig.rel.cuc.1.35 ~"C",
+    !(treatment %in% sig.rel.cuc.0.45) & !(treatment %in% sig.rel.cuc.1.35) ~"D"))
+  
+  ggplot(data= data, aes(x= low,  y= high))+ 
+    geom_text_repel(data = data, aes(x = low , y = high , label = treatment, color = group))+
+    scale_color_manual(labels = c("0.45 +1.35", "0.45", "1.35", "none"), values=c("red","blue", "orange","green"))+
+    geom_smooth(method = "lm", se = FALSE)
+  
+# ggsave(filename = "Figures_all_conc/G.ultimum_cuc/cuc_gu_box_scatter_low_high_concentrations.png", height = 8, width =10)
+###     2 D Illustration gp & rel------
+  data = df_BLW2 %>% filter(!treatment %in% c("K6", "K10", "K17", "K27", "K37"))
+  data =data %>% mutate(group = case_when(
+    treatment %in% sig.rel.cu.gu & treatment %in% sig.gp.cu.gu ~ "A",
+    treatment %in% sig.rel.cu.gu & !(treatment %in% sig.gp.cu.gu) ~"B",
+    !(treatment %in% sig.rel.cu.gu) & treatment %in% sig.gp.cu.gu ~"C",
+    !(treatment %in% sig.rel.cu.gu) & !(treatment %in% sig.gp.cu.gu) ~"D"))
+  
+  ggplot(data= data, aes(x= rel.cu.gu,  y= gp.cu.gu))+ 
+    geom_text_repel(data = data, aes(x = rel.cu.gu , y = gp.cu.gu , label = treatment, color = group))+
+    scale_color_manual(labels = c("ds + gp", "ds", "gp", "none"), values=c("red","blue", "orange","green"))
+
+  # ggsave("Figures_all_conc/G.ultimum_cuc/cu_gu_2D_plot_ds_gp_selection2.png", height = 8, width =10)
+  data %>% filter(group =="A") %>% arrange(desc(rel.cu.gu)) %>% select(treatment)
+  data %>% filter(group =="B") %>% arrange(desc(rel.cu.gu)) %>%select(treatment)
+  data %>% filter(group =="C") %>% arrange(desc(rel.cu.gu)) %>%select(treatment)
+  data %>% filter(group =="D") %>% arrange(desc(rel.cu.gu)) %>%select(treatment)
+  rm(data)
+  
+##  2.3 R. solani - cucumber----------
+###     Growth promotion---------
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0,4)))
+  data.nm = batch.select.fun(normal.dist, batch.select) %>% filter(plant.pathogen == "rsolani-cuc",
+                                                                   variable == "gp")
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cu_rs_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$gp, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cu_rs_red, batch.select)
+  
+  color.code = c( rep("grey85",11),  rep("grey64", 11), rep("grey44", 10),  rep("grey24",12))
+  y.text <- "growth promotion \n [%]"
+  
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$gp, y.text)
+  plot + scale_y_continuous(limits = c(-40, 80), breaks = seq(-40, 80, by = 10))+ geom_hline(aes(yintercept=0), colour="#990000")
+  #ggsave("Figures_all_conc/R.solani_cuc/cuc_rs_box_gp.png", height = 5, width = 14)
+
+  # Select for 2D plots
+  
+  # Select significant composts
+  STD = data_sum_all[grepl("S", data_sum_all$x),]$letters %>% sapply( transform_characters)
+  data_sum_all <- data_sum_all %>%
+    mutate(sig = case_when(
+      batch == "1" ~ !grepl(STD[1], data_sum_all$letters),
+      batch == "2" ~ !grepl(STD[2], data_sum_all$letters),
+      batch == "3" ~ !grepl(STD[3], data_sum_all$letters),
+      batch == "4" ~ !grepl(STD[4], data_sum_all$letters)
+    ))  %>% mutate(sig = ifelse(sig, 1, 0))
+  sig.gp.cu.rs = data_sum_all[data_sum_all$sig ==1,]$x
+  
+###     Biomass--------------
+  # biomass 0.8
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0.8, 4)))
+  # biomass 1.4
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(1.4,3), 0.6))
+  
+  data.nm = batch.select.fun(normal.dist, batch.select) %>% filter(plant.pathogen == "rsolani-cuc",
+                                                                   variable == "biomass")
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cu_rs_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$biomass, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  # for 0.8
+  data =list[[1]]
+  list[[1]] = data[c(4,1,2,3,5:nrow(data)),]
+  data =list[[2]]
+  list[[2]] = data[c(2,1,3:nrow(data)),]
+  
+  # for 1.4 / 0.6
+  data =list[[1]]
+  list[[1]] = data[c(5,1,2,3,4, 6:nrow(data)),]
+  
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cu_rs_red, batch.select)
+  color.code = c("black", rep("grey85",10), "black", rep("grey64", 10), "black", rep("grey44", 9), "black",  rep("grey24",11))
+  y.text <- "Biomass \n g"
+  
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$biomass, y.text)
+  plot + scale_y_continuous(limits = c(0, 11), breaks = seq(0, 11, by = 0.5) )
+  
+  #ggsave("Figures_all_conc/R.solani_cuc/cuc_gu_box_biomass_0_8.png", height = 5, width = 14)
+  #ggsave("Figures_all_conc/R.solani_cuc/cuc_gu_box_biomass_1_4.png", height = 5, width = 14)
+
+###     Relative biomass------
+  # 0.8
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0.8,4)))
+  # 1.4
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(1.4,3), 0.6))
+  #### NOTE
+  data.nm = batch.select.fun(normal.dist, batch.select) %>% filter(plant.pathogen == "rsolani-cuc",
+                                                                   variable == "rel")
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cu_rs_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$rel, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  
+  # for 0.8
+  data =list[[1]]
+  list[[1]] = data[c(8,1:7,9:nrow(data)),]
+  data =list[[2]]
+  list[[2]] = data[c(2,1,3:nrow(data)),]
+  
+  # for 1.4
+  data =list[[1]]
+  list[[1]] = data[c(5,1:4,6:nrow(data)),]
+  
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cu_rs_red, batch.select)
+  color.code = c("black", rep("grey85",10), "black", rep("grey64", 10), "black", rep("grey44", 9), "black",  rep("grey24",11))
+  y.text <- "Relative biomass \n [%]"
+  
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$rel, y.text)
+  plot + scale_y_continuous(limits = c(0, 130), breaks = seq(0, 130, by = 10))
+  
+  # ggsave("Figures_all_conc/R.solani_cuc/cuc_rs_box_rel_0_8.png", height = 5, width = 14)
+  # ggsave("Figures_all_conc/R.solani_cuc/cuc_rs_box_rel_1_4.png", height = 5, width = 14)
+###     Survival rate------
+  # 0.8
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(0.8,4)))
+  # 1.4
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(rep(1.4,3), 0.6))
+  #### NOTE
+  data.nm = batch.select.fun(normal.dist, batch.select) %>% filter(plant.pathogen == "rsolani-cuc",
+                                                                   variable == "surv")
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cu_rs_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$surv.perc, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  # for 0.8
+  data =list[[1]]
+  list[[1]] = data[c(7,1:6,8:nrow(data)),]
+  
+  # for 1.4
+  data =list[[1]]
+  list[[1]] = data[c(5,1:4,6:nrow(data)),]
+  
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Data selection for plot
+  data.test = batch.select.fun(df_cu_rs_red, batch.select)
+  color.code = c("black", rep("grey85",10), "black", rep("grey64", 10), "black", rep("grey44", 9), "black",  rep("grey24",11))
+  y.text <- "Survival rate \n [%]"
+  
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$surv.perc, y.text)
+  plot + scale_y_continuous(limits = c(0, 110), breaks = seq(0, 100, by = 10))
+  
+  #ggsave("Figures_all_conc/R.solani_cuc/cuc_rs_box_surv_0_8.png", height = 5, width = 14)
+  #ggsave("Figures_all_conc/R.solani_cuc/cuc_rs_box_surv_1_4.png", height = 5, width = 14)
+###     Mixed concentrations----
+  # Relative biomass
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(1.4, 0.8, 0.8, 0.8))
+  data.nm = normal.dist %>% 
+    filter(plant.pathogen == "rsolani-cuc",
+           variable == "rel",
+           case_when(
+             batch == 1 ~conc == 1.4,
+             batch == 2 ~conc == 0.8,
+             batch == 3 ~conc == 0.8,
+             batch == 4 ~conc == 0.8
+           ))
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cu_rs_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$rel, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  data =list[[1]]
+  list[[1]] = data[c(5,1:4,6:nrow(data)),]
+  data =list[[2]]
+  list[[2]] = data[c(2,1,3:nrow(data)),]
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Plot
+  data.test = batch.select.fun(df_cu_rs_red, batch.select)
+  color.code = c("black", rep("grey85",10), "black", rep("grey64", 10), "black", rep("grey44", 9), "black",  rep("grey24",11))
+  y.text <- "Relative biomass \n [%]"
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$rel, y.text)
+  plot + scale_y_continuous(limits = c(0, 120), breaks = seq(0, 120, by = 10))
+  #ggsave("Figures_all_conc/R.solani_cuc/cuc_rs_box_rel_mixed.png", height = 5, width = 14)
+  
+  # Surv
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(1.4, 0.8, 0.8, 0.8))
+  data.nm = normal.dist %>% 
+    filter(plant.pathogen == "rsolani-cuc",
+           variable == "surv",
+           case_when(
+             batch == 1 ~conc == 1.4,
+             batch == 2 ~conc == 0.8,
+             batch == 3 ~conc == 0.8,
+             batch == 4 ~conc == 0.8
+           ))
+  # loop for statistics
+  list = list()
+  for (i in 1:4) {
+    data = df_cu_rs_red %>% filter(batch == i, conc == data.nm$conc[i]) 
+    TEST_summary(data, data$treatment, data$surv.perc, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum%>% arrange(mean)
+  }
+  data =list[[1]]
+  list[[1]] = data[c(5,1:4,6:nrow(data)),]
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]], list[[4]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  # Plot
+  data.test = batch.select.fun(df_cu_rs_red, batch.select)
+  color.code = c("black", rep("grey85",10), "black", rep("grey64", 10), "black", rep("grey44", 9), "black",  rep("grey24",11))
+  y.text <- "Survival rate \n [%]"
+  plot = plot_box_ast(data_sum_all, data.test, color.code, data.test$surv.perc, y.text)
+  plot + scale_y_continuous(limits = c(0, 110), breaks = seq(0, 100, by = 10))
+  #ggsave("Figures_all_conc/R.solani_cuc/cuc_rs_box_surv_mixed.png", height = 5, width = 14)
+  
+  # Select significant composts
+  STD = data_sum_all[grepl("S", data_sum_all$x),]$letters %>% sapply( transform_characters)
+  data_sum_all <- data_sum_all %>%
+    mutate(sig = case_when(
+      batch == "1" ~ !grepl(STD[1], data_sum_all$letters),
+      batch == "2" ~ !grepl(STD[2], data_sum_all$letters),
+      batch == "3" ~ !grepl(STD[3], data_sum_all$letters),
+      batch == "4" ~ !grepl(STD[4], data_sum_all$letters)
+    ))  %>% mutate(sig = ifelse(sig, 1, 0))
+  sig.rel.cu.rs = data_sum_all[data_sum_all$sig ==1,]$x
+  
+  rm(STD, data_sum_all, list, plot, batch.select, data, data_sum, data_sum_all, data.test, data.nm,
+     color.code, y.text, i)
+###     Correlations-----
+  # rel & surv
+  conc.level = c(rep(0.8,4)); cor.method = "pearson"
+  conc.level = c(1.4, 1.4, 1.4, 0.6); cor.method = "spearman"
+  #png(file="Figures_all_conc/R.solani_cuc/Cu_rs_cor_surv_rel_conc_low.png")
+  #png(file="Figures_all_conc/R.solani_cuc/Cu_rs_cor_surv_rel_conc_high.png")
+  par(mfrow =c(2,2))
+  for (i in 1:4) {
+    data1 =df_cu_rs_red_K %>% filter(batch == i, conc == conc.level[i]) %>% group_by(treatment, conc) %>% summarise(rel = mean(rel)) %>% select(treatment, conc, rel)
+    data2 =df_cu_rs_red_K %>% filter(batch == i, conc == conc.level[i]) %>% group_by(treatment, conc) %>% summarise(surv = mean(surv.perc)) %>% select(treatment, conc, surv)
+    cor =cor.test(data1$rel, data2$surv, method= cor.method)
+    print(shapiro.test(data1$rel)); print(shapiro.test(data2$surv))
+    plot(data1$rel, data2$surv, col="red")
+    mtext(paste(i," cor = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  }
+  #dev.off()
+  
+  # concentrations
+  
+  # rel
+  #png(file="Figures_all_conc/R.solani_cuc/Correlation_within_bioassay/Cu_rs_cor_conc_rel.png")
+  par(mfrow =c(2,2))
+  for (i in 1:4) {
+    data1 =df_cu_rs_red_K %>% filter(batch == i, conc == 0.8) %>% group_by(treatment, conc) %>% summarise(rel = mean(rel)) %>% select(treatment, conc, rel)
+    data2 =df_cu_rs_red_K %>% filter(batch == i, conc == conc.level[i]) %>% group_by(treatment, conc) %>% summarise(rel = mean(rel)) %>% select(treatment, conc, rel)
+    cor =cor.test(data1$rel, data2$rel, method= "spearman")
+    print(shapiro.test(data1$rel)); print(shapiro.test(data2$rel))
+    plot(data1$rel, data2$rel, col="red")
+    mtext(paste(i," cor = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  }
+  #dev.off()
+  
+  #surv.perc
+  #png(file="Figures_all_conc/R.solani_cuc/Correlation_within_bioassay/Cu_rs_cor_conc_surv.png")
+  par(mfrow =c(2,2))
+  for (i in 1:4) {
+    data1 =df_cu_rs_red_K %>% filter(batch == i, conc == 0.8) %>% group_by(treatment, conc) %>% summarise(surv.perc = mean(surv.perc)) %>% dplyr::select(treatment, conc, surv.perc)
+    data2 =df_cu_rs_red_K %>% filter(batch == i, conc == conc.level[i]) %>% group_by(treatment, conc) %>% summarise(surv.perc = mean(surv.perc)) %>% dplyr::select(treatment, conc, surv.perc)
+    cor =cor.test(data1$surv.perc, data2$surv.perc, method= "spearman")
+    print(shapiro.test(data1$surv.perc)); print(shapiro.test(data2$surv.perc))
+    plot(data1$surv.perc, data2$surv.perc, col="red")
+    mtext(paste(i," cor = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  }
+  #dev.off()
+  dev.off()
+  # rel batch I-III
+  data1 =df_cu_rs_red_K %>% filter(conc == 0.8 & batch != 4) %>% group_by(treatment, conc) %>% summarise(rel = mean(rel), batch = mean(batch)) %>% dplyr::select(treatment, conc, rel, batch)
+  data2 =df_cu_rs_red_K %>% filter(conc == 1.4 & batch !=4)%>%
+    group_by(treatment, conc) %>% summarise(rel = mean(rel)) %>% dplyr::select(treatment, conc, rel)
+  cor.test(data1$rel, data2$rel, method= "spearman")
+  shapiro.test(data1$rel);shapiro.test(data2$rel)
+  data = merge(data1, data2, by = "treatment")
+  data$batch  = as.factor(data$batch)
+  
+  ggplot(data, aes(x=rel.x, y= rel.y, col =batch)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("conc 0.8 ~1.4 batch seperate")
+  #ggsave("Figures_all_conc/R.solani_cuc/LM_conc_rel_sep.png", height =6 , width = 10)
+  ggplot(data, aes(x=rel.x, y= rel.y)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("conc 0.8 ~1.4 batch together")
+  #ggsave("Figures_all_conc/R.solani_cuc/LM_conc_rel.png", height =6 , width = 10)
+  
+  # surv batch I-III
+  data1 =df_cu_rs_red_K %>% filter(conc == 0.8 & batch != 4) %>% group_by(treatment, conc) %>% summarise(surv.perc = mean(surv.perc), batch = mean(batch)) %>% dplyr::select(treatment, conc, surv.perc, batch)
+  data2 =df_cu_rs_red_K %>% filter(conc == 1.4 & batch !=4)%>%
+    group_by(treatment, conc) %>% summarise(surv.perc = mean(surv.perc)) %>% dplyr::select(treatment, conc, surv.perc)
+  cor.test(data1$surv.perc, data2$surv.perc, method= "spearman")
+  shapiro.test(data1$surv.perc);shapiro.test(data2$surv.perc)
+  data = merge(data1, data2, by = "treatment")
+  data$batch  = as.factor(data$batch)
+  
+  ggplot(data, aes(x=surv.perc.x, y= surv.perc.y, col =batch)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("conc 0.8 ~1.4 batch seperate")
+  #ggsave("Figures_all_conc/R.solani_cuc/LM_conc_surv_sep.png", height =6 , width = 10)
+  ggplot(data, aes(x=surv.perc.x, y= surv.perc.y)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("conc 0.8 ~1.4 batch together")
+  #ggsave("Figures_all_conc/R.solani_cuc/LM_conc_surv.png", height =6 , width = 10)
+  
+  # rel & gp
+  batch.select <- data.frame(batch = c(1, 2, 3, 4), conc = c(1.4, 0.8, 0.8, 0.8)) # all normal distributed
+  data.test = batch.select.fun(df_cu_rs_red_K,batch.select) 
+  #png(file="Figures_all_conc/R.solani_cuc/Correlation_within_bioassay/Cu_rs_cor_gp_rel.png")
+  par(mfrow =c(2,2))
+  for (i in 1:4) {
+    data1 =data.test %>% filter(batch == i) %>% group_by(treatment) %>% summarise(rel = mean(rel)) %>% dplyr::select(treatment, rel)
+    data2 =df_cu_rs_red_K %>% filter(batch == i, conc == 0) %>% group_by(treatment) %>% summarise(gp = mean(gp)) %>% dplyr::select(treatment, gp)
+    cor =cor.test(data1$rel, data2$gp, method= "pearson")
+    print(shapiro.test(data1$rel))
+    print(shapiro.test(data2$gp))
+    plot(data1$rel, data2$gp, col="red")
+    mtext(paste(i," cor = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  }
+  #dev.off()
+  # surv.perc & gp
+  #png(file="Figures_all_conc/R.solani_cuc/Correlation_within_bioassay/Cu_rs_cor_gp_surv.png")
+  par(mfrow =c(2,2))
+  for (i in 1:4) {
+    data1 =data.test %>% filter(batch == i) %>% group_by(treatment) %>% summarise(surv = mean(surv.perc)) %>% dplyr::select(treatment, surv)
+    data2 =df_cu_rs_red_K %>% filter(batch == i, conc == 0) %>% group_by(treatment) %>% summarise(gp = mean(gp)) %>% dplyr::select(treatment, gp)
+    cor =cor.test(data1$surv, data2$gp, method= "pearson")
+    print(shapiro.test(data1$surv))
+    print(shapiro.test(data2$gp))
+    plot(data1$surv, data2$gp, col="red")
+    mtext(paste(i," cor = ",round(cor$estimate,3),"p =", round(cor$p.value,3)), side=3)
+  }
+  #dev.off()
+  dev.off()
+  
+  # all batches together surv
+  data1 =data.test %>% group_by(treatment) %>% summarise(surv = mean(surv.perc), batch = mean(batch)) %>% select(treatment, surv, batch)
+  data2 =df_cu_rs_red_K %>% filter(conc == 0) %>% group_by(treatment) %>% summarise(gp = mean(gp)) %>% select(treatment, gp)
+  cor =cor.test(data1$surv, data2$gp, method= "pearson")
+  print(shapiro.test(data1$surv)); print(shapiro.test(data2$gp)) # normal distributed
+  data =merge(data1, data2, by = "treatment")
+  data$batch = as.factor(data$batch)
+
+  # plot
+  ggplot(data, aes(x=surv, y= gp)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("LM gp ~surv batch together")
+  #ggsave("Figures_all_conc/R.solani_cuc/LM_gp_surv_all.png", height =6 , width = 10)
+  ggplot(data, aes(x=surv, y= gp, color = batch)) + # batches seperatly
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("LM gp ~surv batch sep")
+  #ggsave("Figures_all_conc/R.solani_cuc/LM_gp_surv_sep.png", height =6 , width = 10)
+  
+  # all batches together rel
+  data1 =data.test %>% group_by(treatment) %>% summarise(rel = mean(rel), batch = mean(batch)) %>% select(treatment, rel, batch)
+  data2 =df_cu_rs_red_K %>% filter(conc == 0) %>% group_by(treatment) %>% summarise(gp = mean(gp)) %>% select(treatment, gp)
+  cor =cor.test(data1$rel, data2$gp, method= "pearson")
+  print(shapiro.test(data1$rel)); print(shapiro.test(data2$gp)) # normal distributed
+  data =merge(data1, data2, by = "treatment")
+  data$batch = as.factor(data$batch)
+  
+  # plot
+  ggplot(data, aes(x=rel, y= gp)) + # all batches together
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("LM gp ~rel batch together")
+   #ggsave("Figures_all_conc/R.solani_cuc/LM_gp_rel_all.png", height =6 , width = 10)
+  ggplot(data, aes(x=rel, y= gp, color = batch)) + # batches seperatly
+    geom_point(shape=1)+ geom_smooth(method=lm)+ ggtitle("LM gp ~rel batch sep")
+  #ggsave("Figures_all_conc/R.solani_cuc/LM_gp_rel_sep.png", height =6 , width = 10)
+  
+  # Cor relative biomass and survival rate
+  
+  
+  
+  # average weight of plant correlation with survival rate?
+  data1 =df_cu_rs_red_K %>% filter(surv !=0)
+  data1$surv = as.factor(data1$surv)
+  ANOVA = aov(avgplant ~surv, data = data1)
+  summary(ANOVA)
+  TUKEY = TukeyHSD(ANOVA)
+  multcompLetters4(ANOVA, TUKEY)
+  
+  ggplot(data1, aes(y = avgplant, x = surv))+ geom_boxplot()
+  #ggsave("Figures_all_conc/R.solani_cuc/avgweight_surv_all.png")
+  ggplot(data1, aes(y = avgplant, x = surv))+ geom_boxplot()+ facet_grid(.~conc)
+  #ggsave("Figures_all_conc/R.solani_cuc//avgweight_surv_conc_sep.png")
+  rm(data1, batch.select, cor, data, data.test, data1, data2, conc.level, i, ANOVA, TUKEY)
+
+###     Plots 0.8 & 1.4--------
+  
+  data1 = df_cu_rs %>% filter(conc == 0.8 & !treatment %in% c("K4", compost.exclude))
+  data.nm = normal.dist %>% filter(plant.pathogen == "rsolani-cuc" & conc == 0.8 & variable == "rel")
+  conc = 0.8
+  
+  data1 = df_cu_rs %>% filter(conc == 1.4 & !treatment %in% c("K4", compost.exclude))
+  data.nm = normal.dist %>% filter(plant.pathogen == "rsolani-cuc" & conc == 1.4 & variable == "rel")
+  conc = 1.4
+  
+
+  # For both
+  list = list()
+  for (i in 1:3) {
+    data = data1 %>% filter(batch == i, conc == conc) 
+    TEST_summary(data, data$treatment, data$rel, i)
+    data_sum$batch <- i
+    list[[i]] <- data_sum %>% arrange(mean)
+  }
+  data_sum_all =rbind(list[[1]], list[[2]], list[[3]]) # This has to be done manually
+  data_sum_all$x <- as.character(data_sum_all$x) %>% factor(levels=unique(data_sum_all$x)) # change factor levels
+  
+  STD = data_sum_all[grepl("S", data_sum_all$x),]$letters %>% sapply( transform_characters)
+  data_sum_all <- data_sum_all %>%
+    mutate(sig = case_when(
+      batch == "1" ~ !grepl(STD[1], data_sum_all$letters),
+      batch == "2" ~ !grepl(STD[2], data_sum_all$letters),
+      batch == "3" ~ !grepl(STD[3], data_sum_all$letters)
+    ))  %>% mutate(sig = ifelse(sig, 1, 0))
+  
+  sig.rel.cuc.0.8 = data_sum_all[data_sum_all$sig ==1,]$x
+  sig.rel.cuc.1.4 = data_sum_all[data_sum_all$sig ==1,]$x
+  
+  # Plot
+  data1 = df_cu_rs %>% filter(conc == 0.8 & !treatment %in% c("K4", compost.exclude)) %>% group_by(treatment) %>% dplyr::summarise(low = mean(rel))
+  data2 = df_cu_rs %>% filter(conc == 1.4 & !treatment %in% c("K4", compost.exclude)) %>% group_by(treatment) %>% dplyr::summarise(high = mean(rel))
+  data = merge(data1, data2, by = "treatment") %>% filter(!treatment %in% c("Std2", "Std3", "Std4", "Std5"))
+  
+  data =data  %>% mutate(group = case_when(
+    treatment %in% sig.rel.cuc.0.8 & treatment %in% sig.rel.cuc.1.4 ~ "A",
+    treatment %in% sig.rel.cuc.0.8 & !(treatment %in%sig.rel.cuc.1.4) ~"B",
+    !(treatment %in% sig.rel.cuc.0.8) & treatment %in% sig.rel.cuc.1.4 ~"C",
+    !(treatment %in% sig.rel.cuc.0.8) & !(treatment %in% sig.rel.cuc.1.4) ~"D"))
+  
+  ggplot(data= data, aes(x= low,  y= high))+ 
+    geom_text_repel(data = data, aes(x = low , y = high , label = treatment, color = group))+
+    scale_color_manual(labels = c("0.8 +1.4", "0.8", "none"), values=c("red","blue","green"))+
+    geom_smooth(method = "lm", se = FALSE)
+   # ggsave(filename = "Figures_all_conc/R.solani_cuc/cuc_rs_box_scatter_low_high_concentrations.png", height = 8, width =10)
+  
+###     2 D Illustration gp & rel------
+  data = df_BLW2 %>% filter(!treatment %in% c("K6", "K10", "K17", "K27", "K37"))
+  data =data %>% mutate(group = case_when(
+    treatment %in% sig.rel.cu.rs & treatment %in% sig.gp.cu.rs ~ "A",
+    treatment %in% sig.rel.cu.rs & !(treatment %in% sig.gp.cu.rs) ~"B",
+    !(treatment %in% sig.rel.cu.rs) & treatment %in% sig.gp.cu.rs ~"C",
+    !(treatment %in% sig.rel.cu.rs) & !(treatment %in% sig.gp.cu.rs) ~"D"))
+  
+  ggplot(data= data, aes(x= rel.cu.rs,  y= gp.cu.rs))+ 
+    geom_text_repel(data = data, aes(x = rel.cu.rs , y = gp.cu.rs , label = treatment, color = group))+
+    scale_color_manual(labels = c("ds + gp", "ds", "gp", "none"), values=c("red","blue", "orange","green"))
+  
+  # ggsave("Figures_all_conc/R.solani_cuc/cu_rs_2D_plot_ds_gp_selection2.png", height = 8, width =10)
+  data %>% filter(group =="A") %>% select(treatment)
+  data %>% filter(group =="B") %>% select(treatment)
+  data %>% filter(group =="C") %>% select(treatment)
+  data %>% filter(group =="D") %>% select(treatment)
+  rm(data)
+  
+# 3 Comparison among the plant.pathogen systems-------
+##  3.1 Peat substrate among batches------
+  # Biomass
+  data1 = df_cp[grepl("S", df_cp$treatment),
+                c("treatment","conc","biomass", "rel")]
+  data1$surv.perc <- NA; data1$path.plant = "globi-cress"
+  data2 = df_cu_gu[grepl("S", df_cu_gu$treatment),
+                   c("treatment","conc","biomass", "rel", "surv.perc")]
+  data3 = df_cu_rs[grepl("S", df_cu_rs$treatment),
+                   c("treatment","conc","biomass", "rel", "surv.perc")]
+  data3$conc = as.factor(data3$conc)
+  data2$path.plant = "globi-cuc" ; data3$path.plant = "rsolani-cuc"
+  data.test =rbind(data1, data2, data3)
+  data.test =data.test %>% filter(conc != 0.15)
+  rm(data1,data2,data3)
+  
+  #g1 = ggplot(data.test %>% filter(path.plant != "rsolani-cuc"), aes(treatment, biomass))+
+  #  geom_boxplot() + facet_grid(path.plant ~ conc)+ xlab("")
+  #g2 = ggplot(data.test %>% filter(path.plant == "rsolani-cuc" & conc != 0.6), aes(treatment, biomass))+
+  #  geom_boxplot() + facet_grid(. ~ conc)+ xlab("")
+  ggplot(data.test %>% filter(conc ==0), aes(treatment, biomass))+
+    geom_boxplot() + facet_grid(. ~ path.plant)+ xlab("")
+  #ggsave("Figures_all_conc/Peat_substrate/Std_biomass_control.png", height = 4, width = 10)
+  
+  # relative biomass
+  data.test$conc <- as.character(data.test$conc)
+  data.test[data.test$conc == 0.8 | data.test$conc == 0.45,"conc"] = "low"
+  data.test[data.test$conc == 1.4 | data.test$conc == 1.35,"conc"] = "high"
+  data.test$conc = as.factor(data.test$conc)
+  data.test$conc = relevel(data.test$conc, ref ="low")
+  
+  # plot with mixed concentrations option 1
+  d1 = data.test %>%
+    filter(path.plant =="globi-cress" & conc == case_when(treatment =="Std3" ~ "low", treatment !="Std3" ~ "high"))
+  d2 = data.test %>%
+    filter(path.plant =="globi-cuc" & conc == case_when(treatment =="Std3" ~ "low", treatment !="Std3" ~ "high"))
+  d3 = data.test %>%
+    filter(path.plant =="rsolani-cuc" & conc == case_when(treatment =="Std2" ~ "high", treatment !="Std2" ~ "low"))
+  data.select =rbind(d1, d2, d3)
+  ggplot(data.select, aes(treatment, rel))+
+    geom_boxplot() + facet_grid(. ~ path.plant)+ xlab("")+ ylab("Relative biomass \n [%]")
+  #ggsave("Figures_all_conc/Std_rel_mixed.png", height = 4, width = 10)
+  
+  # plot with mixed concentrations option 2
+  d1 = data.test %>%
+    filter(path.plant =="globi-cress" & conc == "low")
+  d2 = data.test %>%
+    filter(path.plant =="globi-cuc" & conc == case_when(treatment =="Std3" ~ "low", treatment =="Std2" ~ "low", treatment == "Std4" ~ "high", treatment == "Std5"~ "high"))
+  d3 = data.test %>%
+    filter(path.plant =="rsolani-cuc" & conc == case_when(treatment =="Std2" ~ "high", treatment !="Std2" ~ "low"))
+  data.select =rbind(d1, d2, d3)
+  ggplot(data.select, aes(treatment, rel))+
+    geom_boxplot() + facet_grid(. ~ path.plant)+ xlab("")+ ylab("Relative biomass \n [%]")
+  rm(d1, d2,d3)
+  #ggsave("Figures_all_conc/Std_rel_mixed2.png", height = 4, width = 10)
+  
+  ggplot(data.test %>% filter(conc !=0 & conc!=0.6), aes(treatment, rel))+
+    geom_boxplot() + facet_grid(conc ~ path.plant)+ xlab("")+ ylab("Relative biomass \n [%]")
+ #ggsave("Figures_all_conc/Std_relative_biomass.png", height = 8, width = 10)
+
+  # Statistics for biomass at conc 0
+  data.select = data.test %>% filter(path.plant =="globi-cress" & conc == 0)
+  data.select = data.test %>% filter(path.plant =="globi-cuc" & conc == 0)
+  data.select = data.test %>% filter(path.plant =="rsolani-cuc" & conc == 0)
+  
+  ANOVA = aov(biomass ~ treatment, data.select)
+  summary(ANOVA)
+  TukeyHSD(ANOVA)
+  shapiro.test(resid(ANOVA))
+  
+  # Statistics for disease suppression
+  #cress
+  data.select = data.test %>% filter(path.plant =="globi-cress" & conc == "low")
+  data.select = data.test %>% filter(path.plant =="globi-cress" & conc == "high")
+  data.select = data.test %>%
+    filter(path.plant =="globi-cress" & conc == case_when(treatment =="Std3" ~ "low", treatment !="Std3" ~ "high"))
+  ANOVA = aov(rel ~ treatment, data.select)
+  # gu-cuc
+  data.select = data.test %>% filter(path.plant =="globi-cuc" & conc == "low")
+  data.select = data.test %>% filter(path.plant =="globi-cuc" & conc == "high")
+  data.select = data.test %>%
+    filter(path.plant =="globi-cuc" & conc == case_when(treatment =="Std3" ~ "low", treatment !="Std3" ~ "high")) #option 1
+  data.select = data.test %>%
+    filter(path.plant =="globi-cuc" & conc == case_when(treatment =="Std2" ~ "low", treatment == "Std3" ~"low", treatment =="Std4" ~ "high", treatment == "Std5" ~ "high")) # option 2
+  ANOVA = aov(surv.perc ~ treatment, data.select) # surv
+  ANOVA = aov(rel ~ treatment, data.select) # rel
+  
+  summary(ANOVA)
+  TUKEY = TukeyHSD(ANOVA)
+  multcompLetters4(ANOVA, TUKEY)
+  shapiro.test(resid(ANOVA)); hist(resid(ANOVA))
+  # rs- cuc
+  data.select = data.test %>% filter(path.plant =="rsolani-cuc" & conc == "low")
+  data.select = data.test %>% filter(path.plant =="rsolani-cuc" & conc == "high")
+  data.select = data.test %>%
+    filter(path.plant =="rsolani-cuc" & conc == case_when(treatment =="Std2" ~ "high", treatment !="Std2" ~ "low"))
+  
+  kruskal.test(surv.perc~treatment, data =data.select)
+  pairwise_results <- pairwise.wilcox.test(data.select$surv.perc, data.select$treatment, p.adjust.method = "BH")
+  KRUSKAL =tri.to.squ(pairwise_results$p.value)
+  multcompLetters(KRUSKAL)
+  
+  rm(g1, g2,g3, data.select, data.test, ANOVA, TUKEY)
+  
+##  3.2 Corr between bioassays with selected concentrations-----
+###     Data selection for disease suppression -----
+  results <- list()
+  # Selection 1
+  data1 = df_cp %>% filter(case_when(batch == 1 ~ conc == 1.35,
+                                     batch == 2 ~ conc == 0.45,
+                                     batch == 3 ~ conc == 1.35,
+                                     batch == 4 ~ conc == 1.35))
+  data2 =df_cu_gu %>% filter(case_when(batch == 1 ~ conc == 1.35,
+                                       batch == 2 ~ conc == 0.45,
+                                       batch == 3 ~ conc == 1.35,
+                                       batch == 4 ~ conc == 1.35))
+  data3 =df_cu_rs %>% filter(case_when(batch == 1 ~ conc == 1.4,
+                                       batch != 1 ~ conc == 0.8)) 
+  # Selection 2
+  data1 = df_cp %>% filter(conc == 0.45)
+  data2 =df_cu_gu %>% filter(case_when(batch == 1 ~ conc == 0.45,
+                                       batch == 2 ~ conc == 0.45,
+                                       batch == 3 ~ conc == 1.35,
+                                       batch == 4 ~ conc == 1.35))
+  data3 =df_cu_rs %>% filter(case_when(batch == 1 ~ conc == 1.4,
+                                       batch != 1 ~ conc == 0.8)) 
+###     Growth promotion------
+  df.normal = as.data.frame(matrix(NA, nrow = 12, ncol = 4)) # prep of data.frame to store p.values
+  colnames(df.normal) <- c("pathogen-plant", "batch", "shapiro.pvalue", "normal")
+  pps = c("gp.cp", "gp.cu.gu", "gp.cu.rs")
+  df.normal$`pathogen-plant` <- c(rep(pps[1],4), rep(pps[2],4), rep(pps[3],4))
+  df.normal$batch <- c(rep(c(1,2,3,4),3))
+  
+  for (i in 1:4) { # Test for normal distribution
+    data = df_BLW2 %>% filter(batch == i)
+    for (p in 1:3) {
+      sp = shapiro.test(data[,pps[p]])
+      df.normal[df.normal$`pathogen-plant`== pps[p] & df.normal$batch == i, "shapiro.pvalue"] <- round(sp$p.value,3)
+    }
+  }
+  df.normal[df.normal$shapiro.pvalue >= 0.05,"normal"] = 1
+  df.normal[df.normal$shapiro.pvalue < 0.05,"normal"] = 0
+  
+  # correlation between bioassays batches separately
+  df.ct = as.data.frame(matrix(NA, nrow = 15, ncol = 4))
+  colnames(df.ct) = c("comparison","batch", "cor", "p.value")
+  df.ct$comparison = c("cp - cu_gu", "cp - cu_rs", "cu_gu - cu_rs")
+  df.ct$batch = c(rep(1,3), rep(2,3), rep(3,3), rep(4,3), rep("all", 3))
+  
+  for (i in 1:4){
+    data.select = df_BLW2 %>% filter(batch == i)
+    cor = cor.test(data.select$gp.cp, data.select$gp.cu.gu, method= "pearson")
+    df.ct[1+(i-1)*3,"p.value"] = round(cor$p.value,3); df.ct[1+(i-1)*3,"cor"] = round(cor$estimate,3)
+    
+    cor = cor.test(data.select[!data.select$treatment %in% c("K27","K37"),]$gp.cp, data.select[!data.select$treatment %in% c("K27","K37"),]$gp.cu.rs, method= "pearson")
+    df.ct[2+(i-1)*3,"p.value"] = round(cor$p.value,3); df.ct[2+(i-1)*3,"cor"] = round(cor$estimate,3)
+    cor =cor.test(data.select[!data.select$treatment %in% c("K27","K37"),]$gp.cu.gu, data.select[!data.select$treatment %in% c("K27","K37"),]$gp.cu.rs, method= "pearson")
+    df.ct[3+(i-1)*3,"p.value"] = round(cor$p.value,3); df.ct[3+(i-1)*3,"cor"] = round(cor$estimate,3)
+  }
+  # overall
+  data.select = df_BLW2
+  cor = cor.test(data.select$gp.cp, data.select$gp.cu.gu, method= "pearson")
+  df.ct[13,"p.value"] = round(cor$p.value,3); df.ct[13,"cor"] = round(cor$estimate,3)
+  cor = cor.test(data.select[!data.select$treatment %in% c("K27","K37"),]$gp.cp, data.select[!data.select$treatment %in% c("K27","K37"),]$gp.cu.rs, method= "pearson")
+  df.ct[14,"p.value"] = round(cor$p.value,3); df.ct[14,"cor"] = round(cor$estimate,3)
+  cor =cor.test(data.select[!data.select$treatment %in% c("K27","K37"),]$gp.cu.gu, data.select[!data.select$treatment %in% c("K27","K37"),]$gp.cu.rs, method= "pearson")
+  df.ct[15,"p.value"] = round(cor$p.value,3); df.ct[15,"cor"] = round(cor$estimate,3)
+  df.ct$factor = "gp"
+  results[["gp"]] =print(arrange(df.ct, comparison))
+  rm(data, data.select, df.ct, df.normal,sp, i, level, levels_to_relevel,p, pps)
+###     Biomass, rel, ratio -----
+  for(x in c("biomass", "rel", "ratio")){
+  factor <- x
+  data1.s = data1 %>% group_by(treatment) %>% summarize(factor.cp = mean(.data[[x]]), batch = mean(batch)) %>%
+    select(treatment, batch, factor.cp)
+  data2.s = data2 %>% group_by(treatment) %>% summarize(factor.cu.gu = mean(.data[[x]]), batch = mean(batch)) %>%
+    select(treatment, factor.cu.gu)
+  data3.s = data3 %>% group_by(treatment) %>% summarize(factor.cu.rs = mean(.data[[x]]), batch = mean(batch)) %>%
+    select(treatment,factor.cu.rs)
+  
+  df = merge(data1.s, data2.s, by= "treatment")
+  df = merge(df, data3.s, by = "treatment")
+  df = df[!grepl("S", df$treatment),]
+  
+  # relative biomass
+  df.normal = as.data.frame(matrix(NA, nrow = 12, ncol = 4)) # prep of data.frame to store p.values
+  colnames(df.normal) <- c("pathogen-plant", "batch", "shapiro.pvalue", "normal")
+  pps = c("factor.cp", "factor.cu.gu", "factor.cu.rs")
+  df.normal$`pathogen-plant` <- c(rep(pps[1],4), rep(pps[2],4), rep(pps[3],4))
+  df.normal$batch <- c(rep(c(1,2,3,4),3))
+  
+  for (i in 1:4) {
+    data = df %>% filter(batch == i & !treatment %in% compost.exclude)
+    for (p in 1:3) {
+      sp = shapiro.test(data[,pps[p]])
+      df.normal[df.normal$`pathogen-plant`== pps[p] & df.normal$batch == i, "shapiro.pvalue"] <- round(sp$p.value,3)
+    }
+  }
+  df.normal[df.normal$shapiro.pvalue >= 0.05,"normal"] = 1
+  df.normal[df.normal$shapiro.pvalue < 0.05,"normal"] = 0
+  
+  # correlation among bioassays concentration separately
+  df.ct = as.data.frame(matrix(NA, nrow = 15, ncol = 4))
+  colnames(df.ct) = c("comparison","batch", "cor", "p.value")
+  df.ct$comparison = c("cp - cu_gu", "cp - cu_rs", "cu_gu - cu_rs")
+  df.ct$batch = c(rep(1,3), rep(2,3), rep(3,3), rep(4,3), rep("all", 3))
+
+  for (i in 1:4){
+    df.select = df %>% filter(batch == i& !treatment %in% compost.exclude)
+    normal = df.normal %>% filter(batch ==i) %>% pull(normal)
+    cor = cor.test(df.select$factor.cp, df.select$factor.cu.gu, method= ifelse((normal[1]+ normal[2]) ==2, "pearson", "spearman"))
+    df.ct[1+(i-1)*3,"p.value"] = round(cor$p.value,3); df.ct[1+(i-1)*3,"cor"] = round(cor$estimate,3)
+    cor = cor.test(df.select$factor.cp, df.select$factor.cu.rs, method= ifelse((normal[1]+ normal[3]) ==2, "pearson", "spearman"))
+    df.ct[2+(i-1)*3,"p.value"] = round(cor$p.value,3); df.ct[2+(i-1)*3,"cor"] = round(cor$estimate,3)
+    cor =cor.test(df.select$factor.cu.gu, df.select$factor.cu.rs, method= ifelse((normal[2]+ normal[3]) ==2, "pearson", "spearman"))
+    df.ct[3+(i-1)*3,"p.value"] = round(cor$p.value,3); df.ct[3+(i-1)*3,"cor"] = round(cor$estimate,3)
+  }
+  # overall
+  df.select = df %>% filter(!treatment %in% compost.exclude)
+  df.normal = as.data.frame(matrix(NA, nrow=3, ncol =3))
+  colnames(df.normal) = c("pathogen-plant","shapiro.pvalue", "normal")
+  df.normal[,1] = pps
+
+  for (p in 1:3) {
+    sp = shapiro.test(data[,pps[p]])
+    df.normal[df.normal$`pathogen-plant`== pps[p], "shapiro.pvalue"] <- round(sp$p.value,3)
+  }
+  df.normal[df.normal$shapiro.pvalue >= 0.05,"normal"] = 1
+  df.normal[df.normal$shapiro.pvalue < 0.05,"normal"] = 0
+  
+  normal = df.normal$normal
+  cor = cor.test(df.select$factor.cp, df.select$factor.cu.gu, method= ifelse((normal[1]+ normal[2]) ==2, "pearson", "spearman"))
+  df.ct[13,"p.value"] = round(cor$p.value,3); df.ct[13,"cor"] = round(cor$estimate,3)
+  cor = cor.test(df.select$factor.cp, df.select$factor.cu.rs, method= ifelse((normal[1]+ normal[3]) ==2, "pearson", "spearman"))
+  df.ct[14,"p.value"] = round(cor$p.value,3); df.ct[14,"cor"] = round(cor$estimate,3)
+  cor =cor.test(df.select$factor.cu.gu, df.select$factor.cu.rs, method= ifelse((normal[2]+ normal[3]) ==2, "pearson", "spearman"))
+  df.ct[15,"p.value"] = round(cor$p.value,3); df.ct[15,"cor"] = round(cor$estimate,3)
+  # adjust p.values
+  # df.ct$p.adjusted =p.adjust(df.ct$p.value, method = "BH", n = length(df.ct$p.value)) %>% round(3)
+  df.ct$factor = factor
+  results[[x]] <-print(arrange(df.ct, comparison))
+  rm(data1.s, data2.s, data3.s, sp, df, pps, df.normal, normal, p, i, df.ct)
+  }
+  rm(x)
+###     Survival rate---------------
+  x <- "surv.perc"
+  data2.s = data2 %>% group_by(treatment) %>% summarize(factor.cu.gu = mean(.data[[x]]), batch = mean(batch)) %>%
+    select(batch, treatment, factor.cu.gu)
+  data3.s = data3 %>% group_by(treatment) %>% summarize(factor.cu.rs = mean(.data[[x]]), batch = mean(batch)) %>%
+    select(treatment,factor.cu.rs)
+  
+  df = merge(data2.s, data3.s, by= "treatment")
+  df = df[!grepl("S", df$treatment),]
+  
+  # relative biomass
+  df.normal = as.data.frame(matrix(NA, nrow = 8, ncol = 4)) # prep of data.frame to store p.values
+  colnames(df.normal) <- c("pathogen-plant", "batch", "shapiro.pvalue", "normal")
+  pps = c("factor.cu.gu", "factor.cu.rs")
+  df.normal$`pathogen-plant` <- c(rep(pps[1],4), rep(pps[2],4))
+  df.normal$batch <- c(rep(c(1,2,3,4),2))
+  
+  for (i in 1:4) {
+    data = df %>% filter(batch == i & !treatment %in% compost.exclude)
+    for (p in 1:2) {
+      sp = shapiro.test(data[,pps[p]])
+      df.normal[df.normal$`pathogen-plant`== pps[p] & df.normal$batch == i, "shapiro.pvalue"] <- round(sp$p.value,3)
+    }
+  }
+  df.normal[df.normal$shapiro.pvalue >= 0.05,"normal"] = 1
+  df.normal[df.normal$shapiro.pvalue < 0.05,"normal"] = 0
+  
+  # correlation among bioassays concentration separately
+  df.ct = as.data.frame(matrix(NA, nrow = 5, ncol = 4))
+  colnames(df.ct) = c("comparison","batch", "cor", "p.value")
+  df.ct$comparison = c("cu_gu - cu_rs")
+  df.ct$batch = c(1,2,3,4, "all")
+  
+  for (i in 1:4){
+    df.select = df %>% filter(batch == i& !treatment %in% compost.exclude)
+    normal = df.normal %>% filter(batch ==i) %>% pull(normal)
+     cor =cor.test(df.select$factor.cu.gu, df.select$factor.cu.rs, method= ifelse((normal[1]+ normal[2]) ==2, "pearson", "spearman"))
+    df.ct[i,"p.value"] = round(cor$p.value,3); df.ct[i,"cor"] = round(cor$estimate,3)
+  }
+  # overall
+  df.select = df %>% filter(!treatment %in% compost.exclude)
+  df.normal = as.data.frame(matrix(NA, nrow=2, ncol =3))
+  colnames(df.normal) = c("pathogen-plant","shapiro.pvalue", "normal")
+  df.normal[,1] = pps
+  
+  for (p in 1:2) {
+    sp = shapiro.test(data[,pps[p]])
+    df.normal[df.normal$`pathogen-plant`== pps[p], "shapiro.pvalue"] <- round(sp$p.value,3)
+  }
+  df.normal[df.normal$shapiro.pvalue >= 0.05,"normal"] = 1
+  df.normal[df.normal$shapiro.pvalue < 0.05,"normal"] = 0
+  
+  normal = df.normal$normal
+  cor =cor.test(df.select$factor.cu.gu, df.select$factor.cu.rs, method= ifelse((normal[1]+ normal[2]) ==2, "pearson", "spearman"))
+  df.ct[5,"p.value"] = round(cor$p.value,3); df.ct[5,"cor"] = round(cor$estimate,3)
+  df.ct$factor = x
+  results[["surv"]] <-print(arrange(df.ct, comparison))
+  rm(data2.s, data3.s, sp, df, pps, df.normal, normal, p, i, df.ct, df.select, cor, data, factor)
+  cor.summary = do.call(rbind, results)
+  rownames(cor.summary) = NULL
+  #write.csv(cor.summary, file ="Output_files/Compost_bioassay_cor/cor_plant_pathogen_system_Selection1.csv")
+  #write.csv(cor.summary, file ="Output_files/Compost_bioassay_cor/cor_plant_pathogen_system_selection2.csv")
+
+###     Graphical illustration of bioassay comparison------
+  # 
+  # First go to mixed concentrations for all three systems and load results for sig. composts
+  data = df_BLW2 %>% filter(!treatment %in% compost.exclude)
+  
+  data =data %>% mutate(group = case_when(
+    !(treatment %in% sig.rel.cp) & !(treatment %in% sig.rel.cu.gu) & !(treatment %in% sig.rel.cu.rs) ~ "No disease suppression",
+    treatment %in% sig.rel.cp & !(treatment %in% sig.rel.cu.gu) & !(treatment %in% sig.rel.cu.rs) ~ "Only G. ultimum - cress",
+    !(treatment %in% sig.rel.cp) & treatment %in% sig.rel.cu.gu & !(treatment %in% sig.rel.cu.rs) ~"Only G. ultimum - cucumber",
+    !(treatment %in% sig.rel.cp) & !(treatment %in% sig.rel.cu.gu) & treatment %in% sig.rel.cu.rs ~"Only R. solani - cucumber",
+    treatment %in% sig.rel.cp & treatment %in% sig.rel.cu.gu & !(treatment %in% sig.rel.cu.rs) ~"Only G. ultimum",
+    treatment %in% sig.rel.cp & !(treatment %in% sig.rel.cu.gu) & treatment %in% sig.rel.cu.rs ~"G. ultimum -cress & R. solani - cucumber",
+    treatment %in% sig.rel.cp & treatment %in% sig.rel.cu.gu & treatment %in% sig.rel.cu.rs ~"All systems",
+    !(treatment %in% sig.rel.cp) & treatment %in% sig.rel.cu.gu & treatment %in% sig.rel.cu.rs ~"Only in cucumber"
+  ))
+  
+  color.select = c("blue", "darkgreen", "darkorange", "darkorchid1", "cyan4", "darkgoldenrod4", "brown1", "green")
+  g1 = ggplot(data, aes(x = rel.cp, y= rel.cu.gu, color = group))+ geom_text(aes(label=treatment))+
+   scale_color_manual(values = color.select)+ ylab("G. ultimum - cucumber") + xlab("G. ultimum - cress")
+  g2 = ggplot(data, aes(x = rel.cp, y= rel.cu.rs, color = group))+ geom_text(aes(label=treatment))+
+    scale_color_manual(values = color.select)+ xlab("G. ultimum - cress")+ ylab("R. solani -cucumber")
+  g3 = ggplot(data, aes(x = rel.cu.gu, y= rel.cu.rs, color = group))+ geom_text(aes(label=treatment))+
+    scale_color_manual(values = color.select)+ xlab("G. ultimum - cucumber")+ ylab("R. solani -cucumber")
+  #ggsave("Figures_all_conc/Correlation_bioassays/rel_cu_gu_rs_plot_selection1.png", plot = ggarrange(g1, g2,g3, ncol= 3, common.legend = TRUE, legend="bottom"), height= 5, width = 13)
+  #ggsave("Figures_all_conc/Correlation_bioassays/rel_cu_gu_rs_plot_selection2.png", plot = ggarrange(g1, g2,g3, ncol= 3, common.legend = TRUE, legend="bottom"), height= 5, width = 13)
+  
+  rm(g1, g2, data1, color.select)
+###     Linear model conc & batch------
+  # G. ultimum
+  data1 = df_cp %>% filter(!conc %in% c(0, 0.15) & !treatment %in% c("K4", "K6", "K10", "K17", "Std2", "Std3", "Std4", "Std5")) %>%
+    select(treatment, conc, plant, rel, biomass)
+  data2 = df_cu_gu %>% filter(!conc %in% c(0, 0.15) & !treatment %in% c("K6", "K10", "K17", "Std2", "Std3", "Std4", "Std5"))%>%
+    select(treatment, conc, plant, rel, biomass)
+  
+  data =rbind(data1, data2)
+  data = droplevels(data) # drop unused levels
+  
+  ANOVA = aov(rel ~ treatment + conc + plant + conc:plant + treatment:conc + treatment:plant, data = data)
+  summary(ANOVA)
+  plot(ANOVA)
+  shapiro.test(resid(ANOVA))
+  rm(data, data1, data2, ANOVA)
+  
+# 4 Compost meta data-----
+##  4.1 Normal distribution-----
+ 
+  # Are the continuous factors normally distributed?
+  # Function to perform Shapiro-Wilk tests and create the results data frame
+  perform_shapiro_test <- function(df, factor.list) {
+    results <- data.frame(
+      factor = factor.list,
+      p.value = NA,
+      normal = NA
+    )
+    for (i in 1:length(factor.list)) {
+      x <- factor.list[i]
+      sp.test <- shapiro.test(df[, x])
+      results[i, "p.value"] <- round(sp.test$p.value, 3)
+      results[i, "normal"] <- ifelse(sp.test$p.value > 0.05, 1, 0)
+    }
+    return(results)
+  }
+  results <- list()
+  
+  # Perform Shapiro-Wilk tests for different factor lists
+  results[["factor.continous"]] <- perform_shapiro_test(df_BLW2.r, factor.continous)
+  results[["factor.bioassay"]] <- perform_shapiro_test(df_BLW2.r, factor.bioassay)
+  results[["factor.site"]] <- perform_shapiro_test(df_BLW2.r, factor.site)
+  # Bind to one data.frame
+  normal.dist.factors = do.call(rbind, results) 
+  rownames(normal.dist.factors) <- NULL
+  
+  rm(normal, plot, results, sp.test, factor, factor.continuous, factor.list, i, variable, x)
+  
+##  4.2 Compost quality guidelines-------
+  guidelines = as.data.frame(matrix(NA, nrow=10, ncol =3))
+  colnames(guidelines) <-c("factor", "direction", "value")
+  guidelines[,1] = c("pH", "OD550", "sal", "DS", "Nmin", "Corg", "NO3", "NH4", "NO3.Nmin", "NO2" )
+  guidelines[,2] = c(rep("<",3), ">", ">", "<", ">", "<", ">", "<" )
+  guidelines[,3] = c( 8.2, 0.6, 20, 50, 100, 50, 80, 200, 0.4, 20)
+  
+  df_BLW2$quality = 0
+  df = as.data.frame(matrix(data = NA, nrow=nrow(guidelines), ncol = nrow(df_BLW2)))
+  for (i in 1:10) {
+    df_BLW2$quality = df_BLW2$quality + if (guidelines[i,2] == ">") {
+      as.numeric(df_BLW2[, guidelines[i,1]] >  guidelines[i,3])
+    } else as.numeric(df_BLW2[, guidelines[i,1]] <  guidelines[i,3])
+    df[i,] <- df_BLW2$quality
+  }
+  dt = as.data.frame(matrix(data = NA, nrow=nrow(guidelines), ncol = nrow(df_BLW2)))
+  
+  for (i in 2:nrow(df)) {
+    dt[i,] <- df[i,]-df[i-1,]
+  }
+  dt[1,] =df[1,]
+  rownames(dt) = guidelines[,1]
+  as.data.frame(rowSums(dt))
+  rm(dt, df, i)
+  
+###     Range & Median of compost characteristics----
+  # continous physico-chemical & biological compost properties
+  summary_table <- as.data.frame(matrix(data=NA, nrow = length(factor.continous), ncol =3))
+  rownames(summary_table) = factor.continous
+  colnames(summary_table) = c("Max", "Min", "Median")
+  
+  summary_table[,1] <- df_BLW2[,factor.continous] %>%
+    summarize_each(funs(max(., na.rm =TRUE))) %>% t() %>% round(2)
+  
+  summary_table[,2] <- df_BLW2[,factor.continous] %>%
+    summarize_each(funs(min(., na.rm =TRUE))) %>% t() %>% round(2)
+  
+  summary_table[,3] <- df_BLW2[,factor.continous] %>%
+    summarize_each(funs(median(., na.rm =TRUE))) %>% t() %>% round(2)
+  # write.csv(summary_table, file = "Summary_cont_compost_propeties.csv" )
+  
+  # Continous composting process properties
+  summary_table <- as.data.frame(matrix(data=NA, nrow = length(factor.site), ncol =3))
+  rownames(summary_table) = factor.site
+  colnames(summary_table) = c("Max", "Min", "Median")
+  
+  summary_table[,1] <- df_BLW2[,factor.site] %>%
+    summarize_each(funs(max(., na.rm =TRUE))) %>% t() %>% round(2)
+  
+  summary_table[,2] <- df_BLW2[,factor.site] %>%
+    summarize_each(funs(min(., na.rm =TRUE))) %>% t() %>% round(2)
+  
+  summary_table[,3] <- df_BLW2[,factor.site] %>%
+    summarize_each(funs(median(., na.rm =TRUE))) %>% t() %>% round(2)
+  
+  rm(summary_table)
+  
+##  4.3 Batch effect----- 
+  data = df_BLW2.r # adapt depending on including the compost.exclude
+  factor.list = c(factor.continous, factor.site, factor.bioassay)
+  
+  for (i in factor.list) {
+    plot <-data %>%
+      ggplot(aes(x = batch, y =  data[,i])) +
+      geom_boxplot()+
+      geom_point(colour ="red")+
+      ylab(i)+
+      background_pr
+    print(plot)
+  }
+
+  # ANOVA/KRUSKAL for batch
+  results <- data.frame(
+    factor = character(0),
+    method = character(0),
+    statistic = numeric(0),
+    p.value = numeric(0)
+  )
+  for (i in factor.list) {
+    if (normal.dist.factors[normal.dist.factors$factor == i, "normal"] == 1) {
+      model <- aov(data[, i] ~ batch, data = data)
+      factor_name <- i
+      method <- "ANOVA"
+      stat <- summary(model)[[1]][["F value"]][[1]]
+      p_val <- summary(model)[[1]][["Pr(>F)"]][[1]]
+    } else {
+      model <- kruskal.test(data[, i] ~ batch, data = data)
+      factor_name <- i
+      method <- "KRUSKAL"
+      stat <- model$statistic
+      p_val <- model$p.value
+    }
+    
+    # Append the results to the data frame
+    results <- rbind(results, data.frame(factor = factor_name, method = method, statistic = stat, p.value = p_val))
+  }
+  rownames(results) <- NULL
+  results[,4] = round(results[4], 3); results[,3] = round(results[3], 2)
+  
+  # Graphical illustration for the factors with p < 0.05 with letters
+  for (i in results[results$p.value < 0.05,]$factor) {
+    if (results[results$factor == i,]$method == "ANOVA") {
+      model <- aov(data[,i]~ data$batch)
+      summary(model)
+      TUKEY = TukeyHSD(model)
+      letters =multcompLetters4(model, TUKEY)
+    }else{
+      pairwise_results <- pairwise.wilcox.test(data[,i], data$batch, p.adjust.method = "BH")
+      KRUSKAL =tri.to.squ(pairwise_results$p.value)
+      letters = multcompLetters(KRUSKAL)
+    }
+    data1 = na.omit(data[,c("batch",i)])
+    colnames(data1) <- c("batch", "x")
+    myboxplot <- data1 %>% group_by(batch) %>% dplyr::summarize(
+                       min = min(x),
+                       q1 = quantile(x,0.25),
+                       med = median(x),
+                       q3 = quantile(x,0.75),
+                       max= max(x))
+    
+    if(results[results$factor == i,]$method == "ANOVA"){
+    letters = data.frame(batch =names(letters$`data$batch`$Letters), letter = letters$`data$batch`$Letters)
+    myboxplot <- merge(myboxplot, letters, by = "batch")
+    } else{myboxplot$letter <- letters$Letters }
+    
+    g =ggplot(myboxplot, aes(x = factor(batch))) + 
+      geom_boxplot(aes(lower = q1, upper = q3, middle = med, ymin = min, ymax = max), stat = "identity") + 
+      geom_text(aes(y = max, label = letter),vjust = 0)+ xlab("batch") + ylab(i)
+    ggsave(g, filename= paste0("Figures_all_conc/Batch_effect/", "sig_batch_effect", i, ".png"))
+  }
+  rm(i, model, plot, data, factor.list, results, factor_name, stat, p_val, method)
+
+  
+  
+##  4.4 Composting sites / composting method-----
+  # Composting site
+  data = df_BLW2.r[!df_BLW2.r$site %in% c("Frick", "Stein", "Spreitenbach"),]
+  factor.list = c(factor.continous, factor.site, factor.bioassay)
+  
+  for (i in factor.list) {
+    plot <-data %>%
+      ggplot(aes(x = site, y =  data[,i])) +
+      geom_boxplot()+
+      geom_point(colour ="red")+
+      ylab(i)+
+      background_pr
+    print(plot)
+  }
+  
+  # ANOVA/KRUSKAL for composting site
+  results <- data.frame(
+    factor = character(0),
+    method = character(0),
+    statistic = numeric(0),
+    p.value = numeric(0)
+  )
+
+  for (i in factor.list) {
+    if (normal.dist.factors[normal.dist.factors$factor == i, "normal"] == 1) {
+      model <- aov(data[, i] ~ site, data = data)
+      factor_name <- i
+      method <- "ANOVA"
+      stat <- summary(model)[[1]][["F value"]][[1]]
+      p_val <- summary(model)[[1]][["Pr(>F)"]][[1]]
+      Tukey <- TukeyHSD(model)
+      compact_letters <- multcompLetters4(model, Tukey)
+      print(factor_name);print(compact_letters$site$Letters)
+    } else {
+      model <- kruskal.test(data[, i] ~ site, data = data)
+      pairwise_results <- pairwise.wilcox.test(data[, i], data$site, p.adjust.method = "BH")
+      KRUSKAL =tri.to.squ(pairwise_results$p.value)
+      compact_letters_df =multcompLetters(KRUSKAL)
+      print(i);print(compact_letters_df$Letters)
+      factor_name <- i
+      method <- "KRUSKAL"
+      stat <- model$statistic
+      p_val <- model$p.value
+    }
+    
+    # Append the results to the data frame
+    results <- rbind(results, data.frame(factor = factor_name, method = method, statistic = stat, p.value = p_val))
+  }
+  rownames(results) <- NULL
+  results[,4] = round(results[4], 3); results[,3] = round(results[3], 2)
+  #write.csv(results, file= "composting_site_effect.csv", row.names =FALSE)
+  
+  # Diff. among composting sites for specific factors
+  model <- aov(rel.cu.gu~ site, data = data)
+  summary(model)
+  TUKEY = TukeyHSD(model)
+  multcompLetters4(model, TUKEY)
+  
+  kruskal_results = kruskal.test(plant.content~ site, data = data)
+  pairwise_results <- pairwise.wilcox.test(data$plant.content, data$site, p.adjust.method = "BH")
+  KRUSKAL =tri.to.squ(pairwise_results$p.value)
+  multcompLetters(KRUSKAL)
+  
+  # composting method
+  data = df_BLW2 %>% filter(!treatment %in% c("K27", "K37"))
+  factor.list = c(factor.continous, factor.site, factor.bioassay)
+  
+  for (i in factor.list) {
+    plot <-data %>%
+      ggplot(aes(x = comp.system, y =  data[,i])) +
+      geom_boxplot()+
+      geom_point(colour ="red")+
+      ylab(i)+
+      background_pr
+    print(plot)
+  }
+  # ANOVA/KRUSKAL for composting system
+  results <- data.frame(
+    factor = character(0),
+    method = character(0),
+    statistic = numeric(0),
+    p.value = numeric(0)
+  )
+  for (i in factor.list) {
+    if (normal.dist.factors[normal.dist.factors$factor == i, "normal"] == 1) {
+      model <- aov(data[, i] ~ comp.system, data = data)
+      factor_name <- i
+      method <- "ANOVA"
+      stat <- summary(model)[[1]][["F value"]][[1]]
+      p_val <- summary(model)[[1]][["Pr(>F)"]][[1]]
+    } else {
+      model <- kruskal.test(data[, i] ~ comp.system, data = data)
+      factor_name <- i
+      method <- "KRUSKAL"
+      stat <- model$statistic
+      p_val <- model$p.value
+    }
+    
+    # Append the results to the data frame
+    results <- rbind(results, data.frame(factor = factor_name, method = method, statistic = stat, p.value = p_val))
+  }
+  rownames(results) <- NULL
+  results[,4] = round(results[4], 3); results[,3] = round(results[3], 2)
+  #write.csv(results, file= "composting_method_effect.csv", row.names =FALSE)
+
+  # Diff. among composting sites for specific factors
+  model <- aov(data$rank.overall.cu.rs~ comp.system, data = data)
+  summary(model)
+  TUKEY = TukeyHSD(model)
+  multcompLetters4(model, TUKEY)
+  
+  pairwise_results <- pairwise.wilcox.test(data$soil.content, data$comp.system, p.adjust.method = "BH")
+  KRUSKAL =tri.to.squ(pairwise_results$p.value)
+  multcompLetters(KRUSKAL)
+  
+  rm(i, model, plot, data, factor.list, stat, p_val, method, factor, factor_name)
+  
+##  4.5 Season when starting material was collected-----
+  # Creating the season based on the start of composting process
+  df_BLW2 =df_BLW2 %>% mutate(date =case_when(batch ==1 ~ as.Date("2022-05-16"),
+                                              batch ==2 ~ as.Date("2022-07-18"),
+                                              batch ==3 ~ as.Date("2022-09-26"),
+                                              batch ==4 ~ as.Date("2022-04-28")))
+  df_BLW2$date.start =df_BLW2$date - df_BLW2$age
+  
+  df_BLW2 =df_BLW2 %>% mutate(season = case_when(
+    month(date.start) %in% 3:5 ~ "Spring",
+    month(date.start) %in% 6:8 ~ "Summer",
+    month(date.start) %in% 9:11 ~ "Autumn",
+    TRUE ~ "Winter" ))
+  
+  g1 = ggplot(df_BLW2 %>% filter(!treatment %in% c("K6", "K10", "K17")), aes(season, rel.cu.gu))+ geom_boxplot()
+  g2 = ggplot(df_BLW2 %>% filter(!treatment %in% c("K6", "K10", "K17")), aes(season, rel.cu.gu))+ geom_boxplot()
+  g3 = ggplot(df_BLW2 %>% filter(!treatment %in% c("K27", "K37")), aes(season, rel.cu.rs))+ geom_boxplot()
+  ggarrange(g1, g2, g3, ncol =3)
+  
+  ggplot(df_BLW2 %>% filter(!treatment %in% c("K6", "K10", "K17")), aes(x = age, y = ratio.cp, color = season)) +
+    geom_point()+ geom_text(aes(label=site))    
+  
+  
+
+##  4.5 Correlations among compost properties------
+###   Physico-chemical & biological composts characteristics------
+  data = df_BLW2
+  factor.list = c(factor.continous, "age", "NO2")
+  
+  # Create an empty correlation matrix & data.frame for statistics
+  correlation_matrix <- matrix(NA, nrow = length(factor.list), ncol = length(factor.list))
+  correlation_estimates <- data.frame(Variable1 = character(0), Variable2 = character(0), Estimate = numeric(0), Method = character(0), P_Value = numeric(0))
+  
+  # Loop through all combinations of variables
+  for (i in 1:(length(factor.list) - 1)) {
+    for (j in (i + 1):length(factor.list)) {
+      var1 <- factor.list[i]
+      var2 <- factor.list[j]
+      is_var1_normal <- normal.dist.factors[i, 3]
+      is_var2_normal <- normal.dist.factors[j, 3]
+      
+      # Determine the correlation method based on normality
+      if (is_var1_normal == 1 && is_var2_normal == 1) {
+        corr_method <- "pearson"
+      } else {
+        corr_method <- "spearman"
+      }
+      cor = cor.test(data[[var1]], data[[var2]], method = corr_method, use= "p")
+      estimate = cor$estimate
+      p_value = cor$p.value
+      correlation_estimates <- rbind(correlation_estimates, data.frame(Variable1 = var1, Variable2 = var2, Method = corr_method, Estimate = estimate, P_value = p_value))
+      
+      #if (p_value < 0.05) {
+        # Calculate the correlation and store it in the appropriate position
+        correlation <- cor(data[[var1]], data[[var2]], method = corr_method, use= "p")
+        correlation_matrix[i, j] <- correlation
+        correlation_matrix[j, i] <- correlation
+      #}
+     }
+  }
+  rownames(correlation_matrix) = factor.list; colnames(correlation_matrix) = factor.list
+  correlation_matrix[is.na(correlation_matrix)] <-0
+  
+ 
+  corrplot(correlation_matrix, method = "number", diag= FALSE)
+
+  
+  
+  rownames(correlation_estimates) = NULL
+  # Correct for multiple testing with Benjamin-Hochberg
+  correlation_estimates$p_value_adjusted <- p.adjust(correlation_estimates$P_value, method = "BH")
+  correlation_estimates[,4] = round(correlation_estimates[,4], 2)
+  correlation_estimates[,5:6] = round(correlation_estimates[,5:6], 4)
+  correlation_estimates$sig = sig.differences(correlation_estimates$p_value_adjusted)
+  
+  #write.csv(correlation_estimates, file = "Output_files/compost_prop_cor_among_properties.csv")
+  
+  correlation_estimates$Estimate = ifelse(correlation_estimates$p_value_adjusted <0.05, correlation_estimates$Estimate, 0)
+  cor.matrix =correlation_estimates[,c("Variable1", "Variable2", "Estimate")]  %>%
+  pivot_wider(names_from = Variable1, values_from = Estimate) %>% as.data.frame
+  rownames(cor.matrix) = cor.matrix$Variable2; cor.matrix$Variable2 <-NULL
+  
+  mask <- matrix(FALSE, nrow = ncol(correlation_matrix), ncol = ncol(correlation_matrix))
+  rownames(mask) <- colnames(correlation_matrix)
+  colnames(mask) <- colnames(correlation_matrix)
+  
+  
+  
+  # Loop through the cor.matrix to fill the mask
+  for (i in 1:nrow(correlation_estimates)) {
+    if (correlation_estimates$p_value_adjusted[i] < 0.05) {  # Assuming 0.05 as the significance level
+      mask[correlation_estimates$Variable1[i], correlation_estimates$Variable2[i]] <- TRUE
+      mask[correlation_estimates$Variable2[i], correlation_estimates$Variable1[i]] <- TRUE  # For symmetry
+    }
+  }
+  correlation_matrix[!mask] <- 0
+  corrplot(correlation_matrix, method = "number", diag= FALSE, type ="upper")
+  
+####  Composting sides separately
+  data = df_BLW2 %>% filter(site == "Riehen")
+  data = df_BLW2 %>% filter(site == "Leibstadt")
+  data = df_BLW2 %>% filter(site == "Bergdietikon")
+  data = df_BLW2 %>% filter(site == "Fehraltdorf")
+  data = df_BLW2 %>% filter(site == "Uster")
+  
+  
+  # Create an empty correlation matrix & data.frame for statistics
+  correlation_matrix <- matrix(NA, nrow = length(factor.list), ncol = length(factor.list))
+  correlation_estimates <- data.frame(Variable1 = character(0), Variable2 = character(0), Estimate = numeric(0), Method = character(0), P_Value = numeric(0))
+  
+  # Loop through all combinations of variables
+  for (i in 1:(length(factor.list) - 1)) {
+    for (j in (i + 1):length(factor.list)) {
+      var1 <- factor.list[i]
+      var2 <- factor.list[j]
+
+      cor = cor.test(data[[var1]], data[[var2]], method = "spearman", use= "p")
+      estimate = cor$estimate
+      p_value = cor$p.value
+      correlation_estimates <- rbind(correlation_estimates, data.frame(Variable1 = var1, Variable2 = var2, Method = "spearman", Estimate = estimate, P_value = p_value))
+      
+      if (p_value < 0.05) {
+        # Calculate the correlation and store it in the appropriate position
+        correlation <- cor(data[[var1]], data[[var2]], method = "spearman", use= "p")
+        correlation_matrix[i, j] <- correlation
+        correlation_matrix[j, i] <- correlation
+      }
+    }
+  }
+  rownames(correlation_matrix) = factor.list; colnames(correlation_matrix) = factor.list
+  correlation_matrix[is.na(correlation_matrix)] <-0
+  corrplot(correlation_matrix, method = "number", type= "lower", diag= FALSE)
+  
+  rownames(correlation_estimates) = NULL
+  correlation_estimates[,4:5] = round(correlation_estimates[,4:5], 3)
+###   Compost characteristics & bioassay results-----
+  
+# correlation overall/ batch separatly for G. ultimum since we have a significant batch effect
+  data = df_BLW2 %>% filter(!treatment %in% compost.exclude)
+  correlation_estimates <- data.frame(Variable1 = character(0), Variable2 = character(0), Estimate = numeric(0), Method = character(0), P_Value = numeric(0))
+  correlation_matrix <- matrix(NA, nrow = length(factor.list), ncol = length(factor.bioassay))
+  
+  
+  for (i in 1:length(factor.list)){
+    for (j in 1:length(factor.bioassay)) {
+    var1 <- factor.list[i]
+    var2 <- factor.bioassay[j]
+    is_var1_normal <- normal.dist.factors[normal.dist.factors$factor == factor.list[i], 3]
+    is_var2_normal <- normal.dist.factors[normal.dist.factors$factor == factor.bioassay[j], 3]
+    
+    # Determine the correlation method based on normality
+    if (is_var1_normal == 1 && is_var2_normal == 1) {
+      corr_method <- "pearson"
+    } else {
+      corr_method <- "spearman"
+    }
+    cor = cor.test(data[[var1]], data[[var2]], method = corr_method, use= "p")
+    estimate = cor$estimate
+    p_value = cor$p.value
+    correlation_estimates <- rbind(correlation_estimates, data.frame(Variable1 = var1, Variable2 = var2, Method = corr_method, Estimate = estimate, P_value = p_value))
+    
+    if (p_value < 0.05) {
+      # Calculate the correlation and store it in the appropriate position
+      correlation <- cor(data[[var1]], data[[var2]], method = corr_method, use= "p")
+      correlation_matrix[i, j] <- correlation
+    }
+    }
+  }
+  rownames(correlation_matrix) = factor.list; colnames(correlation_matrix) = factor.bioassay
+  correlation_matrix[is.na(correlation_matrix)] <-0
+  corrplot(correlation_matrix, method = "number", diag= TRUE)
+  
+  rownames(correlation_estimates) = NULL
+  correlation_estimates[,4:5] = round(correlation_estimates[,4:5], 3)
+  #write.csv(correlation_estimates, file = "bioassays_correlation.csv", row.names =FALSE)
+
+  data = df_BLW2 %>% filter(site == "Riehen" & !treatment %in% compost.exclude)
+  data = df_BLW2 %>% filter(site == "Leibstadt" & !treatment %in% compost.exclude)
+  data = df_BLW2 %>% filter(site == "Bergdietikon" & !treatment %in% compost.exclude)
+  data = df_BLW2 %>% filter(site == "Fehraltdorf" & !treatment %in% compost.exclude)
+  data = df_BLW2 %>% filter(site == "Uster" & !treatment %in% compost.exclude)
+  
+  
+  correlation_estimates <- data.frame(Variable1 = character(0), Variable2 = character(0), Estimate = numeric(0), Method = character(0), P_Value = numeric(0))
+  correlation_matrix <- matrix(NA, nrow = length(factor.list), ncol = length(factor.bioassay))
+  
+  
+  for (i in 1:length(factor.list)){
+    for (j in 1:length(factor.bioassay)) {
+      var1 <- factor.list[i]
+      var2 <- factor.bioassay[j]
+      is_var1_normal <- normal.dist.factors[normal.dist.factors$factor == factor.list[i], 3]
+      is_var2_normal <- normal.dist.factors[normal.dist.factors$factor == factor.bioassay[j], 3]
+           
+      cor = cor.test(data[[var1]], data[[var2]], method = "spearman", use= "p")
+      estimate = cor$estimate
+      p_value = cor$p.value
+      correlation_estimates <- rbind(correlation_estimates, data.frame(Variable1 = var1, Variable2 = var2, Method = "spearman", Estimate = estimate, P_value = p_value))
+      
+      if (p_value < 0.05) {
+        # Calculate the correlation and store it in the appropriate position
+        correlation <- cor(data[[var1]], data[[var2]], method = "spearman", use= "p")
+        correlation_matrix[i, j] <- correlation
+      }
+    }
+  }
+  rownames(correlation_matrix) = factor.list; colnames(correlation_matrix) = factor.bioassay
+  correlation_matrix[is.na(correlation_matrix)] <-0
+  corrplot(correlation_matrix, method = "number", diag= TRUE)
+  
+  rownames(correlation_estimates) = NULL
+  correlation_estimates[,4:5] = round(correlation_estimates[,4:5], 3)
+  
+  # Plots for presentation 15.01.24
+  
+  data = df_BLW2 %>% filter(!treatment %in% compost.exclude)
+  # Scatter plot
+  plot(data$rel.cp, data$age, main="age",
+       xlab="" , ylab="", pch =19)
+  
+  # Spearman rank sum correlation analysis
+  cor_result <- cor.test(data$rel.cp, data$age, method="spearman")
+  
+  text(95, 250, 
+       paste("rho =", round(cor_result$estimate, 2), "\np =", round(cor_result$p.value,3)),
+       pos=3, col="black")
+  
+  
+  
+# 5 PCA for compost properties-----
+##  5.1 Composting sites-------
+  data = df_BLW2[!df_BLW2$site %in% c("Stein", "Frick", "Spreitenbach"),] # 38 composts
+  data = df_BLW2 %>% filter(!treatment %in% compost.exclude) # 37 composts
+  rownames(data) = data$treatment
+  # Composting sites without basal respiration
+  factor.select <- factor.continous[!factor.continous %in% c("NO3.Nmin", "Nmin", "Corg.N", "Ctot", "max_WHC", "basal", "Ntot")]
+  comp.meta.pca <- prcomp(data[,factor.select], center = TRUE, scale. = TRUE) 
+  loadings <- comp.meta.pca$rotation # Loadings, indicator for importance of a factors
+  
+  # Plot PCA
+  autoplot(comp.meta.pca, # all sites
+           data = data[,c(factor.select, "site")], colour = "site", label = TRUE, frame=TRUE, shape= FALSE) 
+  #scale_color_manual(values = c("yellow3","red","blue", "green", "violet"))+
+  # stat_ellipse(geom="polygon", aes(fill = site), alpha = 0.2, show.legend = FALSE, level = 0.95)
+  #ggsave("Figures/20230814_PDA_compost_charct_sites_batchI-IV.png", height = 5, width = 10)
+  #ggsave("Figures_all_conc/PCOA_compost_rproperties/20230814_PDA_compost_charct_sites_compost_exclude.png", height = 5, width = 10)
+  
+  # PERMANOVA
+  dist <-vegdist(scale(data[,factor.select]), method = "euclidean") 
+  adonis_result <- adonis(dist ~ site, data = na.omit(data[,c(factor.select, "site")]))
+  adonis_result$aov.tab 
+  
+  #biplot(comp.meta.pca)
+##  5.2 Batch-------
+  data = df_BLW2 
+  data = df_BLW2 %>% filter(!treatment %in% compost.exclude) # 37 composts
+  rownames(data) = data$treatment
+  comp.meta.pca <- prcomp(na.omit(data[,factor.select]), center = TRUE, scale. = TRUE) 
+  loadings <- comp.meta.pca$rotation # Loadings, indicator for importance of a factors
+  
+  # Plot PCA
+  autoplot(comp.meta.pca, 
+           data = data[,c(factor.select, "batch")], colour = "batch", label = TRUE, frame=TRUE) 
+  #ggsave("Figures/20230814_PCA_batch_I-IV.png", height = 5, width = 10)
+  #ggsave("Figures_all_conc/PCOA_compost_rproperties/20230814_PCA_batch_compost_exclude.png", height = 5, width = 10)
+  
+  # PERMANOVA
+  dist <-vegdist(scale(data[,factor.select]), method = "euclidean") 
+  adonis_result <- adonis(dist ~ batch, data = na.omit(data[,c(factor.select, "batch")]))
+  adonis_result$aov.tab 
+
+##  5.3 Compost age-------
+  
+  factor.select <- factor.continous[!factor.continous %in% c("NO3.Nmin", "Nmin", "Corg.N", "Ctot", "max_WHC", "basal", "Ntot")]
+  data = df_BLW2[!is.na(df_BLW2$age),] # 40 composts
+  data = df_BLW2 %>% filter(!treatment %in% compost.exclude) # 37 composts
+  data = data[!is.na(data$age),] # 35 composts
+  comp.meta.pca <- prcomp(na.omit(data[,factor.select]), center = TRUE, scale. = TRUE) 
+  
+  # Plot PCA
+  autoplot(comp.meta.pca, 
+           data = data[,c(factor.select, "age")], colour = "age", loadings = TRUE, loadings.label = TRUE, size =4,  
+           loadings.label.colour = 'black') +
+    scale_color_gradient(low = "orange", high = "darkblue") 
+  # ggsave("Figures/20230814_PCA_age.png", height = 5, width = 10)
+  # ggsave("Figures_all_conc/PCOA_compost_rproperties/20230814_PCA_age_compost_exclude.png", height = 5, width = 10)
+  
+  # PERMANOVA
+  dist <-vegdist(scale(na.omit(data[,factor.select])), method = "euclidean") 
+  adonis_result <- adonis(dist ~ age, data = na.omit(data[,c(factor.select, "age")]))
+  adonis_result$aov.tab 
+  
+  # Correlation along axis
+  PCs =comp.meta.pca$x
+  cor.test(data$age, PCs[,1], method = "spearman") # both normal distributed, but 
+  cor.test(data$age, PCs[,2], method = "spearman") # PCs[,2] not normal distributed
+  
+##  5.4 Disease suppression---------------
+  
+  # G.ultimum
+  data = df_BLW2[!df_BLW2$treatment %in% c("K6", "K10"),] # 40 composts
+  data = df_BLW2 %>% filter(!treatment %in% compost.exclude) # 37 composts
+  
+  comp.meta.pca <- prcomp(na.omit(data[,factor.select]), center = TRUE, scale. = TRUE) 
+  dist <-vegdist(scale(data[,factor.select]), method = "euclidean") 
+  # cress
+  autoplot(comp.meta.pca, 
+           data = data[,c(factor.select, "rel.cp")], colour = "rel.cp", loadings = TRUE, loadings.label = TRUE, size =4,  
+           loadings.label.colour = 'black') +
+    scale_color_gradient(low = "orange", high = "darkblue") 
+  #ggsave("Figures/20230814_PCA_ds_gu_cp.png", height = 5, width = 10)
+  #ggsave("Figures_all_conc/PCOA_compost_rproperties/20230814_PCA_ds_gu_cp_compost_exclude.png", height = 5, width = 10)
+  
+  
+  adonis_result <- adonis(dist ~ rel.cp, data = na.omit(data[,c(factor.select, "rel.cp")]))
+  adonis_result$aov.tab 
+  
+  # cucumber
+  autoplot(comp.meta.pca, 
+           data = data[,c(factor.select, "surv.cu.gu")], colour = "surv.cu.gu", loadings = TRUE, loadings.label = TRUE, size =4,  
+           loadings.label.colour = 'black') +
+    scale_color_gradient(low = "orange", high = "darkblue") 
+  #ggsave("Figures/20230814_PCA_ds_gu_cu.png", height = 5, width = 10)
+  #ggsave("Figures_all_conc/PCOA_compost_rproperties/20230814_PCA_ds_gu_cu_compost_exclude.png", height = 5, width = 10)
+  adonis_result <- adonis(dist ~ surv.cu.gu, data = na.omit(data[,c(factor.select, "surv.cu.gu")]))
+  adonis_result$aov.tab 
+  
+  # R. solani -cucumber
+  data = df_BLW2[!df_BLW2$treatment %in% c("K27", "K37"),] # 40 composts
+  data = df_BLW2 %>% filter(!treatment %in% compost.exclude) # 37 composts
+  data$surv.cu.rs = data$surv.cu.rs*20
+  comp.meta.pca <- prcomp(na.omit(data[,factor.select]), center = TRUE, scale. = TRUE) 
+  dist <-vegdist(scale(data[,factor.select]), method = "euclidean") 
+  
+  autoplot(comp.meta.pca, 
+           data = data[,c(factor.select, "surv.cu.rs")], colour = "surv.cu.rs", loadings = TRUE, loadings.label = TRUE, size =4,  
+           loadings.label.colour = 'black') +
+    scale_color_gradient(low = "orange", high = "darkblue") 
+  adonis_result <- adonis(dist ~ surv.cu.rs, data = na.omit(data[,c(factor.select, "surv.cu.rs")]))
+  adonis_result$aov.tab 
+  ggsave("Figures/20230814_PCA_ds_rs_cu.png", height = 5, width = 10)
+  ggsave("Figures_all_conc/PCOA_compost_rproperties/20230814_PCA_ds_rs_cu_compost_exclude.png", height = 5, width = 10)
+  
+  
+##  5.5 Growth promotion
+  
+  # TBA
+  
+# 6 Linear models for disease suppression-----
+##  6.1 G. ultimum-cress----------------
+  # Factors to consider in the model: no correlation above 0.8/-0.8
+  factor.model <- c("treatment", "DS", "pH", "sal", "OD550","NO3","NO2", "NH4", "Nmin",
+                    "PO4","Corg.N","FDA", "batch", "site", "rel.cp", "gp.cp", "ratio.cp", "biomass.cp")
+  fixed.factors <- c("DS", "pH", "sal", "OD550","NO3","NO2", "NH4","Nmin", "PO4", "Corg.N","FDA")
+  data = df_BLW2[, factor.model] # select columns
+  data = data %>% filter(!treatment %in% compost.exclude)
+  
+  # Scale variables since they have very different ranges
+  #data = na.omit(data) # in case there are any NA
+  #for (i in fixed.factors) {
+  #  data[,i] <- scale(data[,i] )}
+  
+  factor <- c("rel.cp", "gp.cp", "ratio.cp", "biomass.cp")
+  name <- c("rel", "gp", "ratio", "biomass")
+  
+###   Classical linear model & linear mixed models------------------
+  for (x in 1:length(factor)) {
+  
+  #sink(paste0("Output_files/Linear_mixed_models/G_ultimum_cress/Classical_lm_gu_cress_",name[x],".txt"))
+  data$response <- data[,factor[x]]
+  lm1 = lm(response ~ DS + pH  + sal + OD550 + NO3 + NO2 + NH4 + PO4 + Corg.N + FDA, data = data, na.action = "na.fail")
+  print(summary(lm1))
+  candidate_models <- dredge(lm1)
+  best.model =get.models(candidate_models, 1)[[1]]
+  print(summary(best.model))
+  tdat <- data.frame(predicted=predict(best.model), residual = residuals(best.model),  batch=data$batch)  #Extract residuals and predicted (theoretical) residuals
+  print(shapiro.test(tdat$residual)) # shaprio.test residuals
+  print(confint(best.model)) # confint interval
+  averaged_model <- model.avg(candidate_models, subset = delta < 4) # get the averaged model
+  print(summary(averaged_model))
+  #sink()
+  
+  # Plotting residuals
+  ggplot(tdat,aes(sample=residual)) + stat_qq() + stat_qq_line() # ggplot of residuals
+  # Plotting model prediction
+  data$pred <- predict(best.model) #very big differences between prediction and actual values?!
+  ggplot(data,aes(x= response ,y=pred)) + geom_point() +
+    geom_abline(slope =1, intercept =0) + theme(legend.position="bottom", legend.direction = "horizontal")+ geom_label(aes(label=treatment))
+  #ggsave(paste0("Output_files/Linear_mixed_models/G_ultimum_cress/Classical_lm_gu_cress_",name[x], "_fitted.png"), height =6, width = 8)
+  
+  # batch as random factor
+  #sink(paste0("Output_files/Linear_mixed_models/G_ultimum_cress/Classical_lmixed_gu_cress_",name[x],".txt"))
+  lm1 = lmer(response ~ DS + pH  + sal + OD550 + NO3 + NO2 + NH4 + PO4 + Corg.N + FDA + (1|batch), data = data, na.action = "na.fail")
+  print(summary(lm1))
+  candidate_models <- dredge(lm1)
+  best.model =get.models(candidate_models, 1)[[1]]
+  print(summary(best.model))
+  print(r.squaredGLMM(best.model))
+  tdat <- data.frame(predicted=predict(best.model), residual = residuals(best.model),  batch=data$batch)
+  print(shapiro.test(tdat$residual)) # shaprio.test residuals
+  print(confint(best.model))
+  averaged_model <- model.avg(candidate_models, subset = delta < 4) # get the averaged model
+  print(summary(averaged_model))
+  #sink()
+
+  # Plotting residuals
+  ggplot(tdat,aes(sample=residual)) + stat_qq() + stat_qq_line() # ggplot of residuals
+  # Plotting model prediction
+  data$pred <- predict(best.model) #very big differences between prediction and actual values?!
+  ggplot(data,aes(x= response ,y=pred)) + geom_point() +
+    geom_abline(slope =1, intercept =0) + theme(legend.position="bottom", legend.direction = "horizontal")+ geom_label(aes(label=treatment))
+  #ggsave(paste0("Output_files/Linear_mixed_models/G_ultimum_cress/Classical_lmixed_gu_cress_",name[x], "_fitted.png"), height =6, width = 8)
+  }
+ 
+
+###   Generalized mixed model and variable selection with GLMULTI------------------
+  # https://www.r-bloggers.com/2013/02/model-selection-and-multi-model-inference/
+  # Define a wrapper function for lme4 linear mixed models
+  
+  glmer.glmulti <- function(formula, data, random = "") {
+    lmer(paste(deparse(formula), random), data = data, REML = F)
+  }
+  
+  for (x in 1:length(factor)) {
+    # Generalized model
+    sink(paste0("Output_files/Linear_mixed_models/G_ultimum_cress/Generalized_lm_gu_cress_",name[x],".txt"))
+    data$response <- data[,factor[x]]
+    global.model <- glm(response ~  DS + pH  + sal + OD550 + NO3 + NO2 + NH4 + PO4 + Corg.N + FDA, data= data )
+    print(summary(global.model))
+    gp.model <- glmulti(global.model, # use the model with built as a starting point
+                        level = 1,  #  just look at main effects
+                        crit="aicc") # use AICc because it works better than AIC for small sample sizes
+    print(weightable(gp.model)) # overview model, aicc, weights
+    top = weightable(gp.model) # Look at the 10-15 best models
+    top = top[top$aicc <= min(top$aicc)+3,]
+    best.model = gp.model@objects[[1]] # get best model
+    print(summary(best.model))
+    tdat <- data.frame(predicted=predict(best.model), residual = residuals(best.model),  batch=data$batch)
+    print(shapiro.test(tdat$residual)) # residuals of best model
+    sink()
+
+    # Plotting model prediction
+    png(paste0("Output_files/Linear_mixed_models/G_ultimum_cress/Genalized_lm_gu_cress_", name[x], "_variable_importance.png"))
+    plot(gp.model, type="s") # plot variable importance: cut off at 0.8 is standard but sometimes cut off at 0.5 also suggested
+    dev.off()
+    
+    data$pred <- predict(best.model)   # Plotting model prediction
+    ggplot(data,aes(x= response ,y=pred)) + geom_point() + theme(legend.position="bottom", legend.direction = "horizontal")+
+      geom_abline(slope =1, intercept =0)+ geom_label(aes(label=treatment))
+    ggsave(paste0("Output_files/Linear_mixed_models/G_ultimum_cress/Generalized_lm_gu_cress_",name[x], "_fitted.png"), height =6, width = 8)
+    # Generalized model with batch as random factor
+    multi.inf <- glmulti(
+      y = response ~DS + pH  + sal + OD550 + NO3 + NO2 + NH4 + PO4 + Corg.N + FDA,
+      random = "+(1|batch)",
+      crit = aicc,
+      data = data,
+      fitfunction = glmer.glmulti,
+      method = "h",
+      level = 1
+    )
+    png(paste0("Output_files/Linear_mixed_models/G_ultimum_cress/Gernalized_lmixed_model-avg_",name[x] , "variable_importance.png"))
+    plot(multi.inf, type="s") # look at the variables which are the most important
+    dev.off()
+    
+    sink(paste0("Output_files/Linear_mixed_models/G_ultimum_cress/Generalized_lmixed_gu_cress_",name[x],".txt"))
+    # get the top models (models that are within 2 AICc of the best model...)
+    n = length(which(weightable(multi.inf)[,"aicc"]-weightable(multi.inf)[1,"aicc"] < 2)) 
+    # print the table for the best models
+    print(weightable(multi.inf)[1:n,])
+    # Generate a list of the top models for averaging
+    m.top = vector("list", n)
+    for (i in 1:n){ # average top models
+      m.top[[i]] = lm(as.character((weightable(multi.inf)[i,"model"])), data=data)
+    }
+    # average the top models (the MuMIn package)  
+    ave = model.avg(m.top)
+    print(summary(ave)) # These are the top model averages
+    est=summary(ave)$coefmat.subset[-1,1]
+    se=summary(ave)$coefmat.subset[-1,3]
+    relimp_ave.m = abs(est)/sum(abs(est)) #most conservative estimation of rel importance according to Cade, BS. (2015) Model averaging and muddled multimodel inferences. Ecology: 96, 3270
+    print(relimp_ave.m)    # Relative importance of predictors
+    sink()
+    }
+##  6.2  G. ultimum - cucumber-----
+  # Factors to consider in the model: no correlation above 0.8/-0.8
+  factor.model <- c("treatment", "DS", "pH", "sal", "OD550","NO3","NO2", "NH4", "Nmin",
+                    "PO4","Corg.N","FDA", "batch", "site", "rel.cu.gu", "surv.cu.gu", "gp.cu.gu", "ratio.cu.gu", "biomass.cu.gu")
+  fixed.factors <- c("DS", "pH", "sal", "OD550","NO3","NO2", "NH4","Nmin", "PO4", "Corg.N","FDA")
+  data = df_BLW2[, factor.model] # select columns
+  data = data %>% filter(!treatment %in% compost.exclude)
+  
+  # Scale variables since they have very different ranges
+  # data = na.omit(data) # in case there are any NA
+  #for (i in fixed.factors) {
+  #  data[,i] <- scale(data[,i] )}
+
+  
+  factor <- c("rel.cu.gu", "surv.cu.gu", "gp.cu.gu", "ratio.cu.gu", "biomass.cu.gu")
+  name <- c("rel", "surv", "gp", "ratio", "biomass")
+  
+###   Classical linear model & linear mixed models------------------
+  for (x in 1:length(factor)) {
+    sink(paste0("Output_files/Linear_mixed_models/G_ultimum_cuc/Classical_lm_gu_cuc_",name[x],".txt"))
+    data$response <- data[,factor[x]]
+    lm1 = lm(response ~ DS + pH  + sal + OD550 + NO3 + NO2 + NH4 + PO4 + Corg.N + FDA, data = data, na.action = "na.fail")
+    print(summary(lm1))
+    candidate_models <- dredge(lm1)
+    best.model =get.models(candidate_models, 1)[[1]]
+    print(summary(best.model))
+    tdat <- data.frame(predicted=predict(best.model), residual = residuals(best.model),  batch=data$batch)  #Extract residuals and predicted (theoretical) residuals
+    print(shapiro.test(tdat$residual)) # shaprio.test residuals
+    print(confint(best.model)) # confint interval
+    averaged_model <- model.avg(candidate_models, subset = delta < 4) # get the averaged model
+    print(summary(averaged_model))
+    sink()
+    
+    # Plotting residuals
+    ggplot(tdat,aes(sample=residual)) + stat_qq() + stat_qq_line() # ggplot of residuals
+    # Plotting model prediction
+    data$pred <- predict(best.model) #very big differences between prediction and actual values?!
+    ggplot(data,aes(x= response ,y=pred)) + geom_point() +
+      geom_abline(slope =1, intercept =0) + theme(legend.position="bottom", legend.direction = "horizontal")+ geom_label(aes(label=treatment))
+    #ggsave(paste0("Output_files/Linear_mixed_models/G_ultimum_cuc/Classical_lm_gu_cuc_",name[x], "_fitted.png"), height =6, width = 8)
+    
+    # batch as random factor
+    sink(paste0("Output_files/Linear_mixed_models/G_ultimum_cuc/Classical_lmixed_gu_cuc_",name[x],".txt"))
+    lm1 = lmer(response ~ DS + pH  + sal + OD550 + NO3 + NO2 + NH4 + PO4 + Corg.N + FDA + (1|batch), data = data, na.action = "na.fail")
+    print(summary(lm1))
+    candidate_models <- dredge(lm1)
+    best.model =get.models(candidate_models, 1)[[1]]
+    print(summary(best.model))
+    print(r.squaredGLMM(best.model))
+    tdat <- data.frame(predicted=predict(best.model), residual = residuals(best.model),  batch=data$batch)
+    print(shapiro.test(tdat$residual)) # shaprio.test residuals
+    print(confint(best.model))
+    averaged_model <- model.avg(candidate_models, subset = delta < 4) # get the averaged model
+    print(summary(averaged_model))
+    sink()
+    
+    # Plotting residuals
+    ggplot(tdat,aes(sample=residual)) + stat_qq() + stat_qq_line() # ggplot of residuals
+    # Plotting model prediction
+    data$pred <- predict(best.model) #very big differences between prediction and actual values?!
+    ggplot(data,aes(x= response ,y=pred)) + geom_point() +
+      geom_abline(slope =1, intercept =0) + theme(legend.position="bottom", legend.direction = "horizontal")+ geom_label(aes(label=treatment))
+    #ggsave(paste0("Output_files/Linear_mixed_models/G_ultimum_cuc/Classical_lmixed_gu_cuc_",name[x], "_fitted.png"), height =6, width = 8)
+  }
+
+##  6.3  R. solani - cucumber------
+  
+  factor.model <- c("treatment", "DS", "pH", "sal", "OD550","NO3","NO2", "NH4", "Nmin",
+                    "PO4","Corg.N","FDA", "batch", "site", "rel.cu.rs", "surv.cu.rs", "gp.cu.rs", "ratio.cu.rs", "biomass.cu.rs")
+  fixed.factors <- c("DS", "pH", "sal", "OD550","NO3","NO2", "NH4","Nmin", "PO4", "Corg.N","FDA")
+  data = df_BLW2[, factor.model] # select columns
+  data = data %>% filter(!treatment %in% compost.exclude)
+  
+  # Scale variables since they have very different ranges
+  # data = na.omit(data) # in case there are any NA
+  for (i in fixed.factors) {
+    data[,i] <- scale(data[,i] )
+  }
+  
+  factor <- c("rel.cu.rs", "surv.cu.rs", "gp.cu.rs", "ratio.cu.rs", "biomass.cu.rs")
+  name <- c("rel", "surv", "gp", "ratio", "biomass")
+  
+###   Classical linear model & linear mixed models------------------
+  for (x in 1:length(factor)) {
+    #sink(paste0("Output_files/Linear_mixed_models/R_solani_cuc/Classical_lm_gu_cuc_",name[x],".txt"))
+    data$response <- data[,factor[x]]
+    lm1 = lm(response ~ DS + pH  + sal + OD550 + NO3 + NO2 + NH4 + PO4 + Corg.N + FDA, data = data, na.action = "na.fail")
+    print(summary(lm1))
+    candidate_models <- dredge(lm1)
+    best.model =get.models(candidate_models, 1)[[1]]
+    print(summary(best.model))
+    tdat <- data.frame(predicted=predict(best.model), residual = residuals(best.model),  batch=data$batch)  #Extract residuals and predicted (theoretical) residuals
+    print(shapiro.test(tdat$residual)) # shaprio.test residuals
+    print(confint(best.model)) # confint interval
+    averaged_model <- model.avg(candidate_models, subset = delta < 4) # get the averaged model
+    print(summary(averaged_model))
+    #sink()
+    
+    # Plotting residuals
+    ggplot(tdat,aes(sample=residual)) + stat_qq() + stat_qq_line() # ggplot of residuals
+    # Plotting model prediction
+    data$pred <- predict(best.model) #very big differences between prediction and actual values?!
+    ggplot(data,aes(x= response ,y=pred)) + geom_point() +
+      geom_abline(slope =1, intercept =0) + theme(legend.position="bottom", legend.direction = "horizontal")+ geom_label(aes(label=treatment))
+    #ggsave(paste0("Output_files/Linear_mixed_models/R_solani_cuc/Classical_lm_gu_cuc_",name[x], "_fitted.png"), height =6, width = 8)
+    
+    # batch as random factor
+    #sink(paste0("Output_files/Linear_mixed_models/R_solani_cuc/Classical_lmixed_gu_cuc_",name[x],".txt"))
+    lm1 = lmer(response ~ DS + pH  + sal + OD550 + NO3 + NO2 + NH4 + PO4 + Corg.N + FDA + (1|batch), data = data, na.action = "na.fail")
+    print(summary(lm1))
+    candidate_models <- dredge(lm1)
+    best.model =get.models(candidate_models, 1)[[1]]
+    print(summary(best.model))
+    print(r.squaredGLMM(best.model))
+    tdat <- data.frame(predicted=predict(best.model), residual = residuals(best.model),  batch=data$batch)
+    print(shapiro.test(tdat$residual)) # shaprio.test residuals
+    print(confint(best.model))
+    averaged_model <- model.avg(candidate_models, subset = delta < 4) # get the averaged model
+    print(summary(averaged_model))
+    #sink()
+    
+    # Plotting residuals
+    ggplot(tdat,aes(sample=residual)) + stat_qq() + stat_qq_line() # ggplot of residuals
+    # Plotting model prediction
+    data$pred <- predict(best.model) #very big differences between prediction and actual values?!
+    ggplot(data,aes(x= response ,y=pred)) + geom_point() +
+      geom_abline(slope =1, intercept =0) + theme(legend.position="bottom", legend.direction = "horizontal")+ geom_label(aes(label=treatment))
+    #ggsave(paste0("Output_files/Linear_mixed_models/R_solani_cuc/Classical_lmixed_gu_cuc_",name[x], "_fitted.png"), height =6, width = 8)
+  }
+  
+  
+  
+  
+
+  
+  
+# 7 Classifier model-----
+  # Preparation for modelling
+
+  # data frame with significant differences (0/1)
+  data = df_BLW2 %>% filter(!treatment %in% compost.exclude)
+  
+  # data$group = ifelse(data$treatment %in% sig.rel.cp, 1, 0)
+  # data$group = ifelse(data$treatment %in% sig.rel.cu.gu, 1, 0)
+  data$group = ifelse(data$treatment %in% sig.rel.cu.rs, 1, 0)
+  
+  data$group = as.factor(data$group)
+  factor.select = c("DS","pH","sal","OD550","NO3","NH4", "PO4","Ntot","Corg","FDA")
+  data = data[,c("group", factor.select)]
+  
+  # Split the data into training and testing sets
+  set.seed(123) # for reproducibility
+  trainIndex <- createDataPartition(data$group, p = 0.8, 
+                                    list = FALSE, 
+                                    times = 1)
+  train_data <- data[trainIndex, ]
+  test_data <- data[-trainIndex, ]
+  
+  # Train a logistic regression model
+  model <- glm(group ~ ., data = train_data, family = "binomial")
+  
+  # Make predictions on the test set
+  predictions <- predict(model, newdata = test_data, type = "response")
+  
+  # Convert predicted probabilities to class labels (0 or 1)
+  predicted_classes <- ifelse(predictions > 0.5, 1, 0)
+  predicted_classes <- as.factor(predicted_classes)
+  
+  # Evaluate the model
+  confusion_matrix <- confusionMatrix(predicted_classes, test_data$group)
+  print(confusion_matrix)
+  
+  
+# 8 Composts characterization comparison BLW1 & BLW2----
+## 8.1 BLW1------
+  flop = df_BLW1[order(df_BLW1$rel.cp), factor.select] %>% head(5)
+  flop$group = "flop"
+  top = df_BLW1[order(-df_BLW1$rel.cp), factor.select ] %>% head(5)
+  top$group = "top"
+  BLW1indcomp =rbind(top, flop)
+  
+  BLW1indsum =BLW1indcomp %>% group_by(group) %>% summarise(age = mean(na.omit(age)),
+                                                            DS = mean(DS),
+                                                            pH = mean(pH),
+                                                            sal = mean(sal), 
+                                                            OD550 = mean(OD550),
+                                                            NO3 = mean(NO3),
+                                                            NH4 = mean(NH4),
+                                                            Nmin = mean(Nmin))
+  BLW1indsum$project = "BLW1"
+  ## 8.2 BLW2-----
+  data = df_BLW2 %>% filter(!treatment %in% compost.exclude)
+  flop = data[order(data$rel.cp), factor.select] %>% head(5)
+  flop$group = "flop"
+  top = data[order(-data$rel.cp), factor.select ] %>% head(5)
+  top$group = "top"
+  BLW2indcomp =rbind(top, flop)
+  
+  BLW2indsum = BLW2indcomp %>% group_by(group) %>% summarise(age = mean(na.omit(age)),
+                                                             DS = mean(DS),
+                                                             pH = mean(pH),
+                                                             sal = mean(sal), 
+                                                             OD550 = mean(OD550),
+                                                             NO3 = mean(NO3),
+                                                             NH4 = mean(NH4),
+                                                             Nmin = mean(Nmin))
+  BLW2indsum$project = "BLW2"
+  
+  top = data[data$treatment %in% c("K8", "K15", "K22", "K24", "K36", "K34", "K41", "K47"),factor.select]
+  flop = data[data$treatment %in% c("K9", "K7", "K23", "K26", "K29", "K33", "K48", "K40"),factor.select]
+  top$group = "top"
+  flop$group = "flop"
+  BLW2indcompb =rbind(top, flop)
+  
+  BLW2indsumb = BLW2indcompb %>% group_by(group) %>% summarise(age = mean(na.omit(age)),
+                                                               DS = mean(DS),
+                                                               pH = mean(pH),
+                                                               sal = mean(sal), 
+                                                               OD550 = mean(OD550),
+                                                               NO3 = mean(NO3),
+                                                               NH4 = mean(NH4),
+                                                               Nmin = mean(Nmin))
+  BLW2indsumb$project = "BLW2"
+  BLW1indsum$method = "topflop"
+  BLW2indsum$method = "topflop"
+  BLW2indsumb$method = "batch"
+  
+  # write.csv(rbind(BLW1indsum, BLW2indsum, BLW2indsumb), file = "Output_files/compost_properties_overview_BLW1_BLW2.csv")
+  
+  ind.comp =rbind(BLW1indcomp, BLW2indcomp)
+  
+  rm(top, flop, BLW1indcomp, BLW1indsum, BLW2indcomp, BLW2indsum, BLW2indsumb, BLW2indcompb, data)
+  
+  ## 8.3 PCOA-----
+  factor.select = c("treatment", "age", "DS", "pH", "sal", "OD550", "NO3", "NH4", "Nmin", "site", "company", "rel.cp", "gp.cp", "project")
+  factor.select.pc = c("DS", "pH", "sal", "OD550", "NO3", "NH4", "Nmin")
+  data = df_all %>% filter(!treatment %in% compost.exclude) %>% select(all_of(factor.select))
+  rownames(data) = data$treatment; data$treatment = NULL
+  data$project = as.factor(data$project)
+  
+  comp.meta.pca <- prcomp(data[,factor.select.pc], center = TRUE, scale. = TRUE) 
+  loadings <- comp.meta.pca$rotation # Loadings, indicator for importance of a factors
+  autoplot(comp.meta.pca, # all sites
+           data = data, colour = "project", loadings.label = TRUE, loadings.color = "black", loadings.label.colour = 'black', label = TRUE, shape= FALSE)+
+    scale_color_manual(labels = c("BLW1", "BLW2"), values = c("coral2", "blue2"))
+  
+  # ggsave(filename= "Figures_all_conc/PCOA_compost_rproperties/20240105_PCA_comp_charct_BLW1_BLW2.png", height= 8 , width = 10 )
+  
+  ind.comp= ind.comp %>% mutate(group.ind = case_when( group == "top" & project == 1 ~ "top.BLW1",
+                                            group == "top" & project == 3 ~ "top.BLW2",
+                                            group == "flop" & project ==1 ~ "flop.BLW1",
+                                            group == "flop" & project ==3 ~ "flop.BLW2"))
+  
+  rownames(ind.comp) = ind.comp$treatment
+  ind.comp$project <- as.factor(ind.comp$project)
+  ind.comp$group.ind
+  comp.meta.pca <- prcomp(ind.comp[,factor.select.pc], center = TRUE, scale. = TRUE) 
+  loadings <- comp.meta.pca$rotation # Loadings, indicator for importance of a factors
+  
+  autoplot(comp.meta.pca, # all sites
+           data = ind.comp, loadings.label = TRUE, loadings.color = "red",
+           loadings.label.colour = 'black', colour ="group.ind", size ="age", label =T, label.col = "black",
+           size.legend = "Size Legend", loading.label.vjust =2)+ scale_size(range = c(1, 20))
+
+  #ggsave(filename = "Figures_all_conc/PCOA_compost_rproperties/20240105_PCA_comp_charct_BLW1_BLW2_only_ISA_compost.png", height = 8, width = 10)
+  
+  autoplot(comp.meta.pca, # all sites
+           data = ind.comp, loadings.label = TRUE, loadings.color = "red",
+           loadings.label.colour = 'black', colour ="site", size=5)
+  
+  #ggsave(filename = "Figures_all_conc/PCOA_compost_rproperties/20240105_PCA_comp_charct_BLW1_BLW2_only_ISA_compost_site.png", height = 8, width = 10)
+  
+  autoplot(comp.meta.pca, # all sites
+           data = ind.comp, loadings.label = TRUE, loadings.color = "red",
+           loadings.label.colour = 'black', colour ="company", size=5, frame= T)
+  #ggsave(filename = "Figures_all_conc/PCOA_compost_rproperties/20240105_PCA_comp_charct_BLW1_BLW2_only_ISA_compost_company.png", height = 8, width = 10)
+  
+  # Permanova to check whether there is significant group effect (flop/top)
+  dist <-vegdist(scale(ind.comp[,factor.select.pc]), method = "euclidean") 
+  
+  adonis_result <- adonis(dist ~ group, data = na.omit(ind.comp[,c(factor.select.pc, "group")]))
+  adonis_result$aov.tab
+  
+  adonis_result <- adonis(dist ~ company, data = na.omit(ind.comp[,c(factor.select.pc, "company")]))
+  adonis_result$aov.tab  
+  
+  adonis_result <- adonis(dist ~ site, data = na.omit(ind.comp[,c(factor.select.pc, "site")]))
+  adonis_result$aov.tab  # It does not really make any difference if Biomassehof is left inside or not
+
+  # PCOA all the composts BLW1 & BLW2
+  
+  comp.meta.pca <- prcomp(data[,factor.select.pc], center = TRUE, scale. = TRUE) 
+  loadings <- comp.meta.pca$rotation # Loadings, indicator for importance of a factors
+  
+  autoplot(comp.meta.pca, # all sites
+           data = data, loadings.label = TRUE, loadings.color = "red",
+           loadings.label.colour = 'black', colour ="project", size ="age", label =T, label.col = "black",
+           size.legend = "Size Legend", loading.label.vjust =2)+ scale_size(range = c(1, 20))
+  
+  #ggsave(filename = "Figures_all_conc/PCOA_compost_rproperties/20240105_PCA_comp_charct_BLW1_BLW2_age.png", height = 8, width = 10)
+  
+  autoplot(comp.meta.pca, # all sites
+           data = data, loadings.label = TRUE, loadings.color = "red",
+           loadings.label.colour = 'black', colour ="project", size ="rel.cp", label =T, label.col = "black",
+           size.legend = "Size Legend", loading.label.vjust =2)+ scale_size(range = c(1, 20))
+  #ggsave(filename = "Figures_all_conc/PCOA_compost_rproperties/20240105_PCA_comp_charct_BLW1_BLW2_rel_cp.png", height = 8, width = 10)
+  
+  autoplot(comp.meta.pca, # all sites
+           data = data, colour ="company", label =T, label.col = "black",
+           size.legend = "Size Legend",  frame=T)
+  #ggsave(filename = "Figures_all_conc/PCOA_compost_rproperties/20240105_PCA_comp_charct_BLW1_BLW2_company.png", height = 8, width = 10)
+
+  
+  dist <-vegdist(scale(data[,factor.select.pc]), method = "euclidean") 
+
+  adonis_result <- adonis(dist ~ company, data = na.omit(data[,c(factor.select.pc, "company")]))
+  adonis_result$aov.tab  
+  
+  adonis_result <- adonis(dist ~ rel.cp, data = na.omit(data[,c(factor.select.pc, "rel.cp")]))
+  adonis_result$aov.tab  
