@@ -1,0 +1,1605 @@
+# Combined analysis of fungi and bacterial communitiy data
+
+# Started: 30.09.24
+# Last changes: 22.09.24
+
+source(file = "setup_F_B_paper1.R")
+
+# ATTENTION load one or the other
+path <- "10000_reads/" # For the fungi
+output_path <- "../../04_Dissemination/01_Publikationen/figures_pdf/"
+
+# Load data------
+  ## General-----
+set.seed(100)  # set random seed
+
+# compost to exclude and factors
+compost.exclude = c("K6","K10","K17","K27","K37")
+factor.continous <-c("age", "DS",  "max_WHC", "pH", "sal", "OD550", "NO2", "NO3","NH4",
+                      "Nmin","NO3.Nmin","PO4","Ntot","Corg","Corg.N", "basal","FDA")
+
+# Meta data
+df_BLW2 = read.csv(file ="data/meta_data_compost_BLW_without_errors.csv", sep =";")
+factors = c("batch", "site", "company", "comp.system", "site_ID") # Change to factor
+for (i in factors) {
+  df_BLW2[, i] <- as.factor(df_BLW2[,i])
+}
+df_BLW2.r = df_BLW2 %>% filter(!treatment %in% compost.exclude) # Reduce normal distribution to 37 composts
+rm(factors,i)
+
+
+# Compost_ID for changing the labeling of the data frame
+compost_ID <- read.csv(file ="data/Key_treatment_compostID.csv", sep= ";")
+compost_ID$treatment = as.factor(compost_ID$treatment)
+compost_ID$compost_ID <- gsub("S", "NC", compost_ID$compost_ID)
+compost_ID$compost_ID = as.factor(compost_ID$compost_ID)
+compost_ID$site_ID <- gsub("Peat", "no compost", compost_ID$site_ID)
+compost_ID$site_ID = as.factor(compost_ID$site_ID)
+compost_ID <- compost_ID %>% filter(!treatment %in% c("K27", "K37")) # Exclude two error composts
+compost_ID$treatment <-droplevels(compost_ID$treatment)
+
+# Key for sequencing samples
+design.BLW2 <- read.csv(file ="data/design_BLW2.csv")
+design.BLW2$site <- as.factor(design.BLW2$site)
+
+# Add the new numbers to the design.BLW2
+design.BLW2 = merge(design.BLW2, compost_ID, by ="treatment") # Add new labeling
+rownames(design.BLW2) <- design.BLW2$ID
+design.BLW2$ID <- NULL
+design.BLW2 = design.BLW2[order(rownames(design.BLW2)),]
+design.BLW2$batch.y <-NULL
+setnames(design.BLW2, "batch.x", "batch")
+design.BLW2 = design.BLW2 %>% filter(!treatment %in% compost.exclude) # 37 compost
+
+bg_theme <- theme_classic() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 0, hjust = 0.3, vjust = 0, size = 14, color ="black"),
+    axis.text.y = element_text(size = 14, color ="black"),
+    text = element_text(size = 14, color ="black"),
+    axis.title = element_text(size=14),
+    legend.text = element_text(size=14)
+  )
+
+  site.colors.dark =  c("#81d4fa","#01579b","#9D8604FF","#e65100","#b39ddb", "#ff9800", "#0288d1")  
+  
+  top <- list(
+    c("2", "5", "6", "8", "18", "20", "24", "25", "26"),
+    c("1","3", "5", "6", "8", "18", "24", "33", "35"),
+    c("14", "17", "19", "24", "26", "32", "34", "35", "36")
+  )
+  
+  flop <- list(
+    c("1", "3", "9", "10", "11", "12", "14", "17", "36"),
+    c("9", "11", "12", "13", "14", "16", "17", "31", "37"),
+    c("2", "5", "10", "11", "12", "13", "20", "23", "33")
+  )
+  
+  sig <- list(
+    c("2", "4", "5", "6", "7", "8", "13", "15", "16", "18", "19", "20","21",
+      "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "37"),
+    c("1", "2", "3", "4", "5", "6", "7", "8", "18", "24", "27", "28", "30", "33", "34", "35", "36"),
+    c("14", "17", "19", "24", "26", "32", "34", "35", "36")
+  )
+
+  ## Sequencing data-------
+  
+  # Fungi
+  
+  # alpha diversity
+  path <- "data/Fungi/"
+  ISS.alpha.F = read.csv(paste0(path, "ISS.alpha.F.BLW2.csv"))
+  rownames(ISS.alpha.F) <- ISS.alpha.F$X; ISS.alpha.F$X <- NULL
+  ISS.alpha.F$treatment <- gsub("_.*", "", rownames(ISS.alpha.F))
+  
+  # Meta file with averages
+  df_BLW2.div.F = read.csv(paste0(path,"df_BLW2.div.csv"))
+  df_BLW2.div.F$X <-NULL
+  df_BLW2.div.F$batch <- as.factor(df_BLW2.div.F$batch)
+  
+  # Bray curtis dissimliarity
+  ISS.bray.F <- read.table(paste0(path,"ISS.bray.txt")) %>% as.matrix() #BC-dis mean of four replicates 
+  ISS.bray.avg.F <- read.table(paste0(path,"ISS.bray.avg.txt")) %>% as.matrix() #BC-dis mean of four replicates 
+  ISS.bray.avg.comp.F <-ISS.bray.avg.F[!grepl("Std", rownames(ISS.bray.avg.F)),!grepl("Std", colnames(ISS.bray.avg.F))]
+  
+  # ASV tables
+  ISS.rob.comp.avg.F <- read.table(file = paste0(path,"ISS.rob.comp.avg.txt"))
+  ISS.comp.avg.F <- read.table(file = "data/Fungi/ISS.F.BLW2.comp.txt")
+  design.filter <- design.BLW2[rownames(design.BLW2) %in% colnames(ISS.comp.avg.F),]
+  ISS.comp.avg.F <- ISS.comp.avg.F %>% t() %>% aggregate(list(design.filter$treatment), mean) # Calculate the average of the four samples
+  rownames(ISS.comp.avg.F) <-ISS.comp.avg.F$Group.1 ;ISS.comp.avg.F$Group.1 <-NULL
+  
+  tax.r = read.table(paste0(path, "tax.F.r.txt")) # Without compost exclude, but with peat!
+  tax.class.red.F <- lapply(tax.r, function(x) gsub("_fam_Incertae_sedis", "_IS", x)) %>% as.data.frame()
+  tax.class.red.F$Species <- ifelse(grepl("_sp$", tax.class.red.F$Species), "unclassified", tax.class.red.F$Species)
+  rownames(tax.class.red.F) <- rownames(tax.r)
+  rm(tax.r)
+  
+  # Bacteria
+  path <- "data/Bacteria/"
+  # Alpha diversity
+  ISS.alpha.B = read.csv(paste0(path,"ISS.alpha.B.BLW2.csv"))
+  rownames(ISS.alpha.B) <- ISS.alpha.B$X; ISS.alpha.B$X <- NULL
+  ISS.alpha.B$treatment <-gsub("_.*", "", rownames(ISS.alpha.B))
+  
+  # Meta file with averages
+  df_BLW2.div.B = read.csv(paste0(path, "df_BLW2.div.csv"))
+  df_BLW2.div.B$X <-NULL
+  df_BLW2.div.B$batch <- as.factor(df_BLW2.div.B$batch)
+  
+  # Bray curtis dissimliarity
+  ISS.bray.B <- read.table(paste0(path, "ISS.bray.txt"))
+  ISS.bray.avg.B <- read.table(paste0(path, "ISS.bray.avg.txt")) %>% as.matrix() #BC-dis mean of four replicates 
+  ISS.bray.avg.comp.B <-ISS.bray.avg.B[!grepl("Std", rownames(ISS.bray.avg.B)),!grepl("Std", colnames(ISS.bray.avg.B))]
+
+  # ASV tables
+  ISS.rob.comp.avg.B <- read.table(file = paste0(path, "ISS.rob.comp.avg.txt")) %>% t()
+  tax.class.red.B <- read.table(paste0(path, "tax.red.txt")) # Without compost exclude, but with peat!
+  ISS.comp.avg.B <- read.table(file ="data/Bacteria/ISS.comp.avg.txt")
+  
+  sequences <-read.fasta(file = "data/Bacteria/8.all.ASV_metaxa.fasta", seqtype = "DNA")
+
+  rm(path)
+
+# Load functions-------
+
+  # Scatter plots
+  plot_scatter <-function(data, variable1, variable2, method = "spearman", xaxis = "Relative biomass [%]", yaxis = "Rating [5-25]"){
+    data$x <-data[,variable1];data$y <- data[, variable2]
+    cor_res  <- cor.test(data$x, data$y, method = method)
+    rho <- round(cor_res$estimate, 2)
+    p_val <- ifelse(cor_res$p.value < 0.001, "< 0.001", paste("=", round(cor_res$p.value,3)))
+    plot <- ggplot(data = data, aes(x = x, y = y)) +
+      geom_point() +
+      geom_text(x = min(data$x), y = max(data$y), 
+                label = paste0("rho = ", rho, ", p ", p_val),
+                hjust = 0, vjust = 1, size = 4) +
+      # Label the axes with the variable names
+      labs(x = xaxis, y = yaxis) +
+      theme_bw()
+    return(plot)
+  }
+  
+  # Ranking function
+  rank_with_na <- function(x) {
+    # rank in descending order, NA gets max rank + 1
+    ranks <- rank(-x, ties.method = "min", na.last = "keep")
+    
+    # Only update NA ranks if there are NAs in the data
+    if (any(is.na(x))) {
+      ranks[is.na(ranks)] <- max(ranks, na.rm = TRUE) + 1
+    }
+    
+    return(ranks)
+  }
+  
+  # Summary table for indicative ASVs
+  table_ind <-function(ISS.rob.comp.avg, tax.class.red, asv_names, ds,list){
+    data.ISS <-ISS.rob.comp.avg %>% as.matrix() # Rarefied and robustly detected
+    ind.ASV.sum <- matrix(NA, nrow = length(asv_names), ncol = 12) %>% as.data.frame() # create empty data.frame
+    
+    tax.class.red[] <- lapply(tax.class.red, function(x) ifelse(grepl("unclassified", x), "unclassified", x))
+    
+    
+    colnames(ind.ASV.sum)<- c("pathplant", "ASV", "PBC", "ISA", "MAASLIN", "ALDEX", "ranksum", "n", "rho", "p", "phylum", "tax")
+    ind.ASV.sum$ASV <- asv_names
+    ind.ASV.sum$pathplant <- ds
+    
+    ind.ASV.sum$phylum <- tax.class.red[asv_names, "Phyla"]
+    ind.ASV.sum$phylum <- gsub("p__", "", ind.ASV.sum$phylum)
+    
+    ind.ASV.sum$tax <-tax.class.red[asv_names,] %>%
+      mutate(tax = case_when(
+        Species != "unclassified" ~ Species,
+        Genus != "unclassified" ~ Genus,
+        Family != "unclassified" ~ Family,
+        Order != "unclassified" ~ Order,
+        Class != "unclassified" ~ Class,
+        Phyla != "unclassified" ~ Phyla,
+        TRUE ~ "unclassified"
+      )) %>% pull("tax")
+    
+    # Number of composts present
+    for (i in 1:nrow(ind.ASV.sum)) {
+      ind.ASV.sum[i, "n"] <-(data.ISS[asv_names[i],] > 0) %>% sum()
+    }
+    
+    # Correlation test
+    for (i in 1:nrow(ind.ASV.sum)) {
+      cor <-cor.test(data.ISS[asv_names[i], ], df_BLW2.r[,ds], method ="spearman")
+      ind.ASV.sum[i, "rho"] <- cor$estimate %>% round(2)
+      ind.ASV.sum[i, "p"] <- cor$p.value %>% round(3)
+    }
+    
+    # Effect size different methods
+    
+    PBC <- list[[1]]
+    ISA <- list[[2]]
+    MASSLIN <- list[[3]]
+    ALDEX <- list[[4]]
+    
+    # PBC
+    for (i in 1:nrow(ind.ASV.sum)) {
+      if(asv_names[i] %in% PBC$X) {
+        ind.ASV.sum[i, "PBC"] <- PBC[PBC$X == asv_names[i], "stat"] %>% round(2)
+      }}
+    
+    # ISA
+    for (i in 1:nrow(ind.ASV.sum)) {
+      if(asv_names[i] %in% ISA$X) {
+        ind.ASV.sum[i, "ISA"] <- ISA[ISA$X == asv_names[i], "stat"] %>% round(2)
+      }}
+    
+    # MAASLIN
+    for (i in 1:nrow(ind.ASV.sum)) {
+      if(asv_names[i] %in% MASSLIN$feature) {
+        ind.ASV.sum[i, "MAASLIN"] <- MASSLIN[MASSLIN$feature == asv_names[i], "coef"] %>% round(3)
+      }}
+    
+    # ALDEX
+    if (nrow(ALDEX) > 1) {
+      for (i in 1:nrow(ind.ASV.sum)) {
+        if(asv_names[i] %in% ALDEX$X) {
+          ind.ASV.sum[i, "ALDEX"] <- ALDEX[ALDEX$X == asv_names[i], "effect"] %>% round(2)
+        }}
+    }
+
+    # Apply the ranking function to each column
+    if (nrow(ind.ASV.sum) > 1) {
+      ranked_df <- as.data.frame(apply(ind.ASV.sum[, 3:6], 2, rank_with_na))
+   
+    # Calculate the rank sum
+    ind.ASV.sum$ranksum <- rowSums(ranked_df)
+    # Order by ranksum
+    ind.ASV.sum <-ind.ASV.sum[order(ind.ASV.sum$ranksum),]
+    
+    } else{
+      ind.ASV.sum$ranksum <- 1
+    }
+
+    return(ind.ASV.sum)
+  }
+  
+  # Pyhlogenetical tree
+  phylo_tree_ASV_flat <- function(ASV, sequences, clade_colors, all =FALSE, size =2, xlim.factor = 1.35, labelsize =3){
+    if(all == FALSE){ASV <- ASV %>% dplyr::select(ASV, Phyla, Class, Order, Family, Genus, Species, BLW1_all)}
+    else{ASV <- ASV %>% dplyr::select(ASV, Phyla, Class, Order, Family, Genus, Species, BLW1_all, assay_combination)}
+    
+    ASV <-ASV %>%
+      mutate(lowest = case_when(
+        Species != "unclassified" ~ Species,
+        Genus != "unclassified" ~ Genus,
+        Family != "unclassified" ~ Family,
+        Order != "unclassified" ~ Order,
+        Class != "unclassified" ~ Class,
+        Phyla != "unclassified" ~ Phyla,
+        TRUE ~ "Unclassified"
+      ))
+    
+    ASV$lowest <- sapply(ASV$lowest, function(x) unlist(strsplit(x, split='_sp', fixed=TRUE))[1]) %>% as.vector()
+    
+    # read FASTA file, select only the FASTA files that are needed
+    required_ids <- ASV$ASV
+    subset_sequences <- sequences[names(sequences) %in% required_ids]
+    
+    # Convert seqinr sequences to a format compatible with msa (if aligning)
+    dna_sequences <- sapply(subset_sequences, function(x) toupper(paste(x, collapse = "")))
+    dna_string_set <- DNAStringSet(dna_sequences)
+    
+    # Create an allignment
+    alignment <- msa(dna_string_set)
+    aligned_sequences <- as.DNAbin(as(alignment, "DNAMultipleAlignment"))
+    
+    # Create a distance matrix and construct a phylogenetic tree
+    dist_matrix <- dist.dna(aligned_sequences, model = "JC69")
+    phylo_tree <- nj(dist_matrix)
+    
+    # Metadata
+    if(all == FALSE){
+      metadata <- data.frame(
+        ASV = names(subset_sequences),  # Ensure this matches the sequence IDs
+        Phylum = ASV[match(names(subset_sequences), ASV$ASV), "Phyla"],
+        lowest = ASV[match(names(subset_sequences), ASV$ASV), "lowest"],
+        BLW1 = ASV[match(names(subset_sequences), ASV$ASV), "BLW1_all"])}
+    else{
+      metadata <- data.frame(
+        ASV = names(subset_sequences),  # Ensure this matches the sequence IDs
+        Phylum = ASV[match(names(subset_sequences), ASV$ASV), "Phyla"],
+        lowest = ASV[match(names(subset_sequences), ASV$ASV), "lowest"],
+        BLW1 = ASV[match(names(subset_sequences), ASV$ASV), "BLW1_all"],
+        combination = ASV[match(names(subset_sequences), ASV$ASV), "assay_combination"])}
+    
+    # Draw the tree
+    
+    # Create a ggtree plot
+    p <- ggtree(phylo_tree, branch.length="none") %<+% metadata +
+      geom_tippoint(aes(color = Phylum), size=labelsize, shape =16, position =position_nudge(x = 0)) +  theme_tree2()+
+      scale_color_manual(values = clade_colors$color)
+    
+    
+    # Extract data from ggtree object
+    p_data <- p$data
+    p_data$label_pad <- str_pad(p_data$label, max(nchar(na.omit(p_data$label))), "right", "_")
+    p_data$name <- paste(p_data$label_pad, p_data$lowest, sep = "_")
+    
+    
+    # Add labels with rotation and alignment adjustments
+    
+    if(all == TRUE){
+      p <- p + ggnewscale::new_scale_color() +
+        geom_tippoint(aes(color = combination), size=labelsize, shape=17, position =position_nudge(x = -1)) +
+        scale_color_manual(values = c("cress_cugu" =    "#8DA0CB" , "cugu_curs" =   "#FC8D62", "cress_curs" = "#E78AC3",
+                                      "cress_cugu_curs" = "gold3"),
+                           labels = c("cress_cugu" = "GU-cr & GU-cu", "cugu_curs" = "GU-cu & RS-cu", "cress_curs" = "GU-cr & RS-cu", "cress_cugu_curs" = "GU-cr & GU-cu & RS-cu" )) 
+    }
+    legend1 = ggpubr::get_legend(p+ theme(legend.position = "right",
+                                          legend.text = element_text(size =9),
+                                          legend.title = element_text(size =10, face ="bold")))
+    
+    p1 =p +ggnewscale::new_scale_colour()  + geom_tiplab(aes(label = name, color = BLW1), data = p_data, size = size, offset =0.5, hjust =0, align =TRUE, linetype =NA)+
+      scale_color_manual(values = c("TRUE" = "red", "FALSE" = "black"))+
+      theme(axis.line = element_blank(),  # Remove axis lines
+            axis.text = element_blank(),  # Remove axis text
+            axis.ticks = element_blank(),  # Remove axis ticks
+            panel.grid = element_blank(),  # Remove grid lines
+            legend.position = "none")+
+      xlim(NA, max(p$data$x) * xlim.factor)
+    
+    return(list(phylo_tree, p1, legend1))
+  }
+  
+  heatmap_all_red <- function(ISS.rob.comp.avg,  asv_names, ds, tip_order, size = 8, adjustcor = FALSE){
+    
+    data.asv <-ISS.rob.comp.avg %>% as.matrix() %>% t()
+    ind.ASV.sum <- matrix(NA, nrow = length(asv_names), ncol = 10) %>% as.data.frame() # create empty data.frame
+    colnames(ind.ASV.sum)<- c("ASV", 
+                              "rho_cress", "p_cress", "padj_cress",
+                              "rho_cugu", "p_cugu", "padj_cugu",
+                              "rho_curs", "p_curs","padj_curs")
+    ind.ASV.sum$ASV <- asv_names
+    
+    # Correlation test
+    rho.name <- c("rho_cress", "rho_cugu", "rho_curs")
+    p.name <- c("p_cress", "p_cugu", "p_curs")
+    p.adj <- c("padj_cress", "padj_cugu", "padj_curs")
+    rho.sig <- c("rho.sig.cress", "rho.sig.cugu", "rho.sig.curs")
+    
+    for (j in 1:3) {
+      for (i in 1:nrow(ind.ASV.sum)) {
+        cor <-cor.test(data.asv[,asv_names[i]], df_BLW2.r[,ds[j]], method ="spearman")
+        ind.ASV.sum[i, rho.name[j]] <- cor$estimate %>% round(2)
+        ind.ASV.sum[i, p.name[j]] <- cor$p.value %>% round(3)
+      }
+      
+      # Adjust for multiple testing
+      if (adjustcor == TRUE) {
+        ind.ASV.sum[, p.adj[j]] <- p.adjust(ind.ASV.sum[, p.name[j]], method = "BH")
+        ind.ASV.sum[, rho.sig[j]] <-ifelse(ind.ASV.sum[, p.adj[j]] < 0.05 , ind.ASV.sum[, rho.name[j]], NA)
+        
+      } else {
+        ind.ASV.sum[, rho.sig[j]] <-ifelse(ind.ASV.sum[, p.name[j]] < 0.05 , ind.ASV.sum[, rho.name[j]], NA)
+      }}
+    
+    
+    rownames(ind.ASV.sum) <- ind.ASV.sum$ASV; ind.ASV.sum$ASV <- NULL
+    
+    # Sort by the order in the phylogenetical tree
+    ind.ASV.sum <- ind.ASV.sum[rev(tip_order),]
+    
+    # Create heat maps
+    column_width <- unit(0.5, "cm")
+    
+    color_ramp <- colorRampPalette(c("lightblue", "darkblue"))(100)
+    
+    H1 <-Heatmap(
+      as.matrix(ind.ASV.sum %>% select(starts_with("rho.sig"))),
+      na_col = "lightgrey",
+      name = "Sperman's\nRho",
+      col = color_ramp,
+      show_row_names = FALSE,
+      show_column_names = TRUE,
+      cluster_rows = FALSE,
+      cluster_columns = FALSE,
+      column_names_gp = gpar(fontsize = size),
+      column_names_rot = 90,
+      width = column_width*3, 
+      heatmap_legend_param = list(title_gp = gpar(fontsize = size, just = "center")),
+      column_labels = c("GU-cr ", "GU-cu", "RS-cu")
+    )
+    return(list(H1, ind.ASV.sum))  
+  }
+  
+  heatmap_all_red_gu <- function(ISS.rob.comp.avg,  asv_names, ds, tip_order, size = 8, adjustcor = FALSE){
+    
+    data.asv <-ISS.rob.comp.avg %>% as.matrix() %>% t()
+    ind.ASV.sum <- matrix(NA, nrow = length(asv_names), ncol = 7) %>% as.data.frame() # create empty data.frame
+    colnames(ind.ASV.sum)<- c("ASV", 
+                              "rho_cress", "p_cress", "padj_cress",
+                              "rho_cugu", "p_cugu", "padj_cugu")
+    ind.ASV.sum$ASV <- asv_names
+    
+    # Correlation test
+    rho.name <- c("rho_cress", "rho_cugu")
+    p.name <- c("p_cress", "p_cugu")
+    p.adj <- c("padj_cress", "padj_cugu")
+    rho.sig <- c("rho.sig.cress", "rho.sig.cugu")
+    
+    for (j in 1:2) {
+      for (i in 1:nrow(ind.ASV.sum)) {
+        cor <-cor.test(data.asv[,asv_names[i]], df_BLW2.r[,ds[j]], method ="spearman")
+        ind.ASV.sum[i, rho.name[j]] <- cor$estimate %>% round(2)
+        ind.ASV.sum[i, p.name[j]] <- cor$p.value %>% round(3)
+      }
+      
+      # Adjust for multiple testing
+      if (adjustcor == TRUE) {
+        ind.ASV.sum[, p.adj[j]] <- p.adjust(ind.ASV.sum[, p.name[j]], method = "BH")
+        ind.ASV.sum[, rho.sig[j]] <-ifelse(ind.ASV.sum[, p.adj[j]] < 0.05 , ind.ASV.sum[, rho.name[j]], NA)
+        ind.ASV.sum[, rho.sig[j]] <-ifelse(ind.ASV.sum[, rho.name[j]] > 0.4 , ind.ASV.sum[, rho.name[j]], NA)
+      } else {
+        ind.ASV.sum[, rho.sig[j]] <-ifelse(ind.ASV.sum[, p.name[j]] < 0.05 , ind.ASV.sum[, rho.name[j]], NA)
+      }}
+    
+    
+    rownames(ind.ASV.sum) <- ind.ASV.sum$ASV; ind.ASV.sum$ASV <- NULL
+    
+    # Sort by the order in the phylogenetical tree
+    ind.ASV.sum <- ind.ASV.sum[rev(tip_order),]
+    
+    # Create heat maps
+    column_width <- unit(0.5, "cm")
+    
+    color_ramp <- colorRampPalette(c("lightblue", "darkblue"))(100)
+    
+    H1 <-Heatmap(
+      as.matrix(ind.ASV.sum %>% select(starts_with("rho.sig"))),
+      na_col = "lightgrey",
+      name = "Sperman's\nRho",
+      col = color_ramp,
+      show_row_names = FALSE,
+      show_column_names = TRUE,
+      cluster_rows = FALSE,
+      cluster_columns = FALSE,
+      column_names_gp = gpar(fontsize = size),
+      column_names_rot = 90,
+      width = column_width*3, 
+      heatmap_legend_param = list(title_gp = gpar(fontsize = size, just = "center")),
+      column_labels = c("GU-cr ", "GU-cu")
+    )
+    return(list(H1, ind.ASV.sum))  
+  }
+  # Converts the matrix resulted by kruskal_pairwise comparison to a matrix that can be read by multicompview
+  tri.to.squ<-function(x){
+    rn<-row.names(x)
+    cn<-colnames(x)
+    an<-unique(c(cn,rn))
+    myval<-x[!is.na(x)]
+    mymat<-matrix(1,nrow=length(an),ncol=length(an),dimnames=list(an,an))
+    for(ext in 1:length(cn))
+    {
+      for(int in 1:length(rn))
+      {
+        if(is.na(x[row.names(x)==rn[int],colnames(x)==cn[ext]])) next
+        mymat[row.names(mymat)==rn[int],colnames(mymat)==cn[ext]]<-x[row.names(x)==rn[int],colnames(x)==cn[ext]]
+        mymat[row.names(mymat)==cn[ext],colnames(mymat)==rn[int]]<-x[row.names(x)==rn[int],colnames(x)==cn[ext]]
+      }
+    }
+    return(mymat)
+  }
+  
+  
+# Alpha Diversity
+# Overview communities ----
+  
+  tax.ISS.B <- tax.class.red.B[colnames(ISS.comp.avg.B),]
+  tax.ISS.F <- tax.class.red.F[rownames(ISS.comp.avg.F),]
+  
+  # Top 5 classifications
+  
+  tax.ISS.F$Phyla %>% table() %>% sort() %>% as.data.frame()
+  tax.ISS.B$Phyla %>% table() %>% nrow()
+  tax.ISS.F$Family %>% table() %>% sort() %>% as.data.frame()
+  tax.ISS.F$Genus %>% table() %>% sort() %>% as.data.frame()
+
+  # In all 7 composts
+  
+  ISS.all.phyla <- ISS.comp.avg.F %>% t() %>% aggregate(list(tax.ISS.F$Genus), mean)
+  rownames(ISS.all.phyla)<-ISS.all.phyla$Group.1;ISS.all.phyla$Group.1 <-NULL
+  ISS.all.phyla[ifelse(ISS.all.phyla > 0, 1,0) %>% rowSums() ==37,]
+  rm(ISS.all.phyla)
+  
+# Alpha diversity------
+  ## Figure3_Alpha_diversity------
+  
+  data <- design.BLW2 %>% filter(!treatment %in% compost.exclude)
+  data.F <- data[rownames(data) %in% rownames(ISS.alpha.F),]
+  data.B <- data[rownames(data) %in% rownames(ISS.alpha.B),]
+ 
+  b1 <-ggplot(ISS.alpha.B , aes(x = reorder(data.B$compost_ID, sobs, na.rm =T), y = sobs, color =data.B$site_ID, fill = data.B$site_ID))+ geom_boxplot()+
+    labs(x = "", y ="Bacterial richness")+
+    scale_color_manual(values= c(site.colors.dark, "grey22"), name= "Composting\nsite")+
+    scale_fill_manual(values= adjustcolor(c(site.colors.dark,"grey22"), alpha.f = 0.2),  name= "Composting\nsite")+
+    scale_y_continuous(limits = c(800, 5300), breaks = seq(1000, 5000, by = 1000))+
+    bg_theme +
+    theme(legend.position = "none", legend.key = element_blank(), legend.title = element_text(size =14),
+          legend.text = element_text(size=14),
+          axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+          panel.grid.major.y = element_line(color = "lightgrey"),
+          axis.title = element_text(size=14))
+  
+
+  f1 <- ggplot(ISS.alpha.F , aes(x = reorder(data.F$compost_ID, sobs, na.rm =T), y = sobs, color =data.F$site_ID, fill = data.F$site_ID))+
+    geom_boxplot()+
+    labs(x = "", y ="Fungal richness")+
+    scale_color_manual(values= c(site.colors.dark, "grey22"), name= "Composting\nsite")+
+    scale_fill_manual(values= adjustcolor(c(site.colors.dark,"grey22"), alpha.f = 0.2),  name= "Composting\nsite")+
+    scale_y_continuous(limits = c(0, 450), breaks = seq(0,450, by = 100))+
+    bg_theme +
+    theme(legend.position = "none", legend.key = element_blank(), legend.title = element_text(size =14),
+          legend.text = element_text(size=14),
+          axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+          panel.grid.major.y = element_line(color = "lightgrey"),
+          axis.title = element_text(size=14))
+  
+  p1 <-plot_grid(b1, f1, nrow =2, axix ="none", rel_heights = c(1,1),
+            ncol =1,labels =c("A", "B")) 
+  
+  
+  b2 <- plot_scatter(df_BLW2.div.B, variable1 = "rel.cp", variable2 = "mean.sobs", xaxis = "Cress-Gu\n Relative biomass [%]", yaxis = "Bacterial richness" )+
+    geom_text_repel(aes(label = Number, show.legend =FALSE,  max.overlaps =20), size =4)+
+    geom_smooth(se =F, method ="lm", colour = "darkred" )+ bg_theme
+  
+  #f2 <- plot_scatter(df_BLW2.div.F, variable1 = "rel.cp", variable2 = "mean.even", xaxis = "Cress-Gu\n Relative biomass [%] ", yaxis = "Fungal evenness" )+
+  # geom_text_repel(aes(label = Number, show.legend =F,  max.overlaps =20))+
+  #  geom_smooth(se =F, method ="lm", colour = "#64769A" )+ bg_theme
+  
+  value_max.B = df_BLW2.div.B %>% group_by(batch) %>% dplyr::summarize(max_value = max(mean.sobs),
+                                                                  quantile = quantile(mean.sobs, probs = 0.75))
+  value_max.B$batch <- as.factor(value_max.B$batch)
+  value_max.B$letter <- c("a", "b", "ab", "a")
+  
+  # Plot with letters
+  b3 = ggplot(df_BLW2.div.B , aes(x= batch, y= mean.sobs, fill = batch))+
+    geom_boxplot()+
+    scale_fill_manual(values =c (rep("white",4)))+
+    scale_x_discrete(labels= c("I", "II", "III", "IV"))+
+    ylab("Bacterial richness") + xlab("Compost set")+
+    bg_theme + theme(axis.text.x = element_text(angle = 0, hjust=0.3, vjust=0))+
+    geom_text(data =value_max.B, aes(x=batch, y = 100 + quantile, label = letter), hjust=-0.2, vjust =-0.2,  size= 4, colour ="black")
+  
+  #value_max.F = df_BLW2.div.F %>% filter(!site_ID %in% c("F", "G")) %>% group_by(site_ID) %>% dplyr::summarize(max_value = max(mean.even),
+  #                                                                                                        quantile = quantile(mean.even, probs = 0.75))
+  #value_max.F$site_ID <- as.factor(value_max.F$site_ID)
+  #value_max.F$letter <- c("a", "ab", "ab", "ab", "b")
+  
+  # Plot
+  #f3 = ggplot(df_BLW2.div.F %>% filter(!site_ID %in% c("F", "G")), aes(x= site_ID, y= mean.even, fill = site_ID, color =site_ID))+
+  # geom_boxplot()+ theme(legend.position = "none")+
+  # scale_color_manual(values= c(site.colors.dark, "grey22"))+
+  # scale_fill_manual(values= adjustcolor(c(site.colors.dark[1:5],"grey22"), alpha.f = 0.2))+
+  # ylab("Fungal evenness") + xlab("Composting site")+
+  # bg_theme +theme(axis.text.x = element_text(angle = 0, hjust=0.3, vjust=0))+
+  # geom_text(data =value_max.F, aes(x=site_ID, y = quantile, label = letter), hjust=-0.2, vjust =-0.2,  size= 4, colour ="black")
+  
+  #p2 <- plot_grid(b2, b3, f2, f3, nrow =1, axis ="non", ncol =4, rel_widths = c(1,0.4, 1, 0.4), labels = c("C", "D", "E", "F"))
+
+  #p3 <- plot_grid(p1, p2, nrow =2, ncol =1, rel_heights = c(2,1))
+  # ggsave(p3, filename ="Figures/Alpha_diversity_plot_A_F.png", height =13, width =14)
+  
+  
+  value_max.d = df_BLW2.r %>% group_by(batch) %>% dplyr::summarize(max_value = max(rel.cp), quantile = quantile (rel.cp, probs = 0.75))
+  value_max.d$batch <- as.factor(value_max.d$batch)
+  value_max.d$letter <- c("a", "b", "a", "ab")
+  
+  d1 <- ggplot(df_BLW2.r, aes(x = batch, y = rel.cp)) +
+    geom_boxplot() +theme(legend.position = "none")+
+    ylab("cress-Gu\n Relative biomass [%]") + xlab("Compost set")+
+    scale_x_discrete(labels= c("I", "II", "III", "IV"))+
+    bg_theme +theme(axis.text.x = element_text(angle = 0, hjust=0.3, vjust=0))+
+    geom_text(data =value_max.d, aes(x=batch, y = quantile, label = letter), hjust=-0.2, vjust =-0.2,  size= 4, colour ="black")
+  
+  #ANOVA <- aov(age ~batch, data = df_BLW2.r)
+  #summary(ANOVA)
+  #TUKEY <-TukeyHSD(ANOVA)
+  #compact_letters <- multcompLetters4(ANOVA, TUKEY)
+  
+  legend <- get_legend(b1+ theme(legend.position = "right"))
+  p2 <- plot_grid(b2, b3, d1, legend, nrow =1, axis ="non", ncol =4, rel_widths = c(2,1,1.1,0.8),
+                  labels = c("C", "D", "E",""))
+  
+  #ggsave(p2, filename ="figure/Alpha_diversity_plot_presentation.png", height =5, width =10)
+  
+  p3 <-plot_grid(p1,p2, nrow =2, ncol =1, rel_heights = c(1.5,1))
+  #ggsave(p3, filename =paste0(output_path, "Figure3_Alpha_diversity.pdf"), height =10, width =10)
+  
+  
+  b2 <- plot_scatter(df_BLW2.div.B, variable1 = "age", variable2 = "mean.sobs", xaxis = "Compost age [days] ", yaxis = "Bacterial richness" )+
+    geom_text_repel(aes(label = Number, show.legend =F,  max.overlaps =20))+
+    geom_smooth(se =F, method ="lm", colour = "#64769A" )+ bg_theme
+  f2 <- plot_scatter(df_BLW2.div.F, variable1 = "age", variable2 = "mean.even", xaxis = "Compost age [days] ", yaxis = "Fungal evenness" )+
+    geom_text_repel(aes(label = Number, show.legend =F,  max.overlaps =20))+
+    geom_smooth(se =F, method ="lm", colour = "#64769A" )+ bg_theme
+  
+  cor.test(df_BLW2.div.B$age, df_BLW2.div.B$mean.sobs, method = "spearman")
+  cor.test(df_BLW2.div.F$age, df_BLW2.div.F$mean.shannon, method ="spearman")
+
+  value_max.age <- df_BLW2.r %>% group_by(batch) %>% dplyr::summarize(max_value = max(age, na.rm =T), quantile = quantile (age, probs = 0.75, na.rm =T))
+  value_max.age$batch <- as.factor(value_max.age$batch)
+  value_max.age$letter <- c("a", "b", "ab", "a")
+  
+  d2 <- ggplot(df_BLW2.r, aes(x = batch, y = age)) +
+    geom_boxplot() +theme(legend.position = "none")+
+    ylab("Compost age [days]") + xlab("Batch")+
+    bg_theme +theme(axis.text.x = element_text(angle = 0, hjust=0.3, vjust=0))+
+    geom_text(data =value_max.age, aes(x=batch, y = quantile, label = letter), hjust=-0.4, vjust =-0.4,  size= 4, colour ="black")
+  
+  p3 <-plot_grid(b2, f2, nrow =1, axis ="non", ncol =2, rel_widths = c(1,1))
+  #ggsave(p3, filename = "figure/Alpha_diversity_plot_compost_age.png", height = 5, width =10)
+  
+  ## S14 Sup_alpha -----
+  
+  b2 <-ggplot(ISS.alpha.B , aes(x = reorder(data.B$compost_ID, evenness, na.rm =T), y = evenness, color =data.B$site_ID, fill = data.B$site_ID))+ geom_boxplot()+
+    labs(x = "", y ="Bacterial evenness")+
+    scale_color_manual(values= c(site.colors.dark, "grey22"), name= "Composting\nsite")+
+    scale_fill_manual(values= adjustcolor(c(site.colors.dark,"grey22"), alpha.f = 0.2),  name= "Composting\nsite")+
+    scale_y_continuous(limits = c(0.6, 0.9), breaks = seq(0, 1, by = 0.05))+
+    bg_theme +
+    theme(legend.position = "none", legend.key = element_blank(), legend.title = element_text(size =14),
+          legend.text = element_text(size=14),
+          axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+          panel.grid.major.y = element_line(color = "lightgrey"),
+          axis.title = element_text(size=14))
+  
+  b3 <-ggplot(ISS.alpha.B , aes(x = reorder(data.B$compost_ID, shannon, na.rm =T), y = shannon, color =data.B$site_ID, fill = data.B$site_ID))+ geom_boxplot()+
+    labs(x = "", y ="Bacterial diversity")+
+    scale_color_manual(values= c(site.colors.dark, "grey22"), name= "Composting\nsite")+
+    scale_fill_manual(values= adjustcolor(c(site.colors.dark,"grey22"), alpha.f = 0.2),  name= "Composting\nsite")+
+    scale_y_continuous(limits = c(4.5, 7.5), breaks = seq(4.5, 7.5, by = 0.5))+
+    bg_theme +
+    theme(legend.position = "none", legend.key = element_blank(), legend.title = element_text(size =14),
+          legend.text = element_text(size=14),
+          axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+          panel.grid.major.y = element_line(color = "lightgrey"),
+          axis.title = element_text(size=14))
+  
+  
+  f2 <- ggplot(ISS.alpha.F , aes(x = reorder(data.F$compost_ID, evenness, na.rm =T), y = evenness, color =data.F$site_ID, fill = data.F$site_ID))+
+    geom_boxplot()+
+    labs(x = "", y ="Fungal evenness")+
+    scale_color_manual(values= c(site.colors.dark, "grey22"), name= "Composting\nsite")+
+    scale_fill_manual(values= adjustcolor(c(site.colors.dark,"grey22"), alpha.f = 0.2),  name= "Composting\nsite")+
+    scale_y_continuous(limits = c(0, 0.8), breaks = seq(0,0.8, by = 0.1))+
+    bg_theme +
+    theme(legend.position = "none", legend.key = element_blank(), legend.title = element_text(size =14),
+          legend.text = element_text(size=14),
+          axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+          panel.grid.major.y = element_line(color = "lightgrey"),
+          axis.title = element_text(size=14))
+  
+  f3 <- ggplot(ISS.alpha.F , aes(x = reorder(data.F$compost_ID, shannon, na.rm =T), y = shannon, color =data.F$site_ID, fill = data.F$site_ID))+
+    geom_boxplot()+
+    labs(x = "", y ="Fungal diversity")+
+    scale_color_manual(values= c(site.colors.dark, "grey22"), name= "Composting\nsite")+
+    scale_fill_manual(values= adjustcolor(c(site.colors.dark,"grey22"), alpha.f = 0.2),  name= "Composting\nsite")+
+    scale_y_continuous(limits = c(0, 4), breaks = seq(0,4, by = 0.5))+
+    bg_theme +
+    theme(legend.position = "none", legend.key = element_blank(), legend.title = element_text(size =14),
+          legend.text = element_text(size=14),
+          axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+          panel.grid.major.y = element_line(color = "lightgrey"),
+          axis.title = element_text(size=14))
+  
+  legend <- get_legend(b2+ theme(legend.position = "bottom"))
+  p4 <-plot_grid(b2, b3, f2, f3,legend, nrow =5, axix ="none",
+                 ncol =1,labels =c("A", "B", "C", "D"), rel_heights = c(1,1,1,1,0.2)) 
+  
+  #ggsave(p4, file=paste0(output_path, "Sup_alpha.pdf"), height =14, width =12)
+  
+  
+  # ANOVA for differences among treatments
+  ANOVA <-aov(sobs ~ treatment, data = ISS.alpha.B)
+  ANOVA <-aov(evenness ~ treatment, data = ISS.alpha.B)
+  ANOVA <-aov(shannon ~ treatment, data = ISS.alpha.B)
+  ANOVA <-aov(sobs ~ treatment, data = ISS.alpha.F)
+  ANOVA <-aov(evenness ~ treatment, data = ISS.alpha.F)
+  ANOVA <-aov(shannon ~ treatment, data = ISS.alpha.F)
+  summary(ANOVA)
+  par(mfrow = c(2,2))
+  plot(ANOVA)
+  
+  
+  rm(d1, data, data.F, data.B, ANOVA, b1, f1, legend, p1, b2, f2, value_max.B, b3, value_max.F, f3, p2, p3)
+
+  ## Correlation B & F alpha diversity------
+  
+  # ANOVA to test for differences
+
+  #sink(file = paste0("output/", path, "Correlation_B_F_richness.txt"))
+  cor.test(df_BLW2.div.B$mean.sobs , df_BLW2.div.F$mean.sobs, method ="spearman")
+  cor.test(df_BLW2.div.B$mean.even , df_BLW2.div.F$mean.even, method = "spearman")
+  cor.test(df_BLW2.div.B$mean.shannon , df_BLW2.div.F$mean.shannon, method = "spearman")
+  
+  mantel(ISS.bray.avg.B, ISS.bray.avg.F, method = "pearson", permutations = 999)
+  
+  #sink()  
+# Beta diversity------
+  ## Figure 4------
+  # Composting site
+  # Bacteria
+
+  data.B <- ISS.bray.avg.comp.B
+  nmds.BLW2.B <- metaMDS(data.B)
+  nmds.BLW2.points.B = nmds.BLW2.B$points %>% as.data.frame()
+  colnames(nmds.BLW2.points.B) = c("nmds1", "nmds2")
+  nmds.BLW2.points.B$treatment = rownames(nmds.BLW2.points.B)
+  df_BLW2.beta.B <- merge(df_BLW2.r, nmds.BLW2.points.B , by ="treatment")
+  nmds.BLW2.B$stress # 0.1
+  
+  find_hull <- function(df_BLW2.beta.B) df_BLW2.beta.B[chull(df_BLW2.beta.B$nmds1, df_BLW2.beta.B$nmds2), ]
+  hulls.B <- plyr::ddply(df_BLW2.beta.B, "site_ID", find_hull)
+  common_xlim <-c(-0.3, 0.75); common_ylim <-c(-0.22, 0.35)
+  
+  
+  b4 <-ggplot(data = df_BLW2.beta.B, aes(x = nmds1, y = nmds2))+
+    bg_theme+
+    scale_fill_manual(values = site.colors.dark, name = "Composting\nsite")+
+    scale_color_manual(values = site.colors.dark, name = "Composting\nsite")+
+    geom_text(x=0.65,y=-0.2,label='stress = 0.10', size=4)+
+    geom_point(aes(color=site_ID))+
+    geom_polygon(data=hulls.B,alpha=0.2,aes(fill=site_ID))+
+    ylab("NMDS2")+xlab("NMDS1")+
+    coord_fixed(ratio =1)+
+    geom_text_repel(data = df_BLW2.beta.B, aes(x = nmds1 , y = nmds2 , label = Number, color = site_ID),
+                    show.legend = FALSE, max.overlaps =20)+
+    xlim(common_xlim)+ ylim(common_ylim)
+  # Graphic with the vectors
+  
+  scrsB <- as.data.frame(vegan::scores(nmds.BLW2.B, display = "sites"))
+  scrsB$treatment <- rownames(scrsB)
+  scrsB.meta <-merge(df_BLW2.r, scrsB, by = "treatment")
+  rownames(scrsB.meta) <- scrsB.meta$treatment; scrsB.meta$treatment<-NULL
+ 
+  fit <- envfit(nmds.BLW2.B, df_BLW2.beta.B[,factor.continous[c(2:15,17)]], data = df_BLW2.beta.B, permutations = 999)
+  spp.scrs.B <- as.data.frame(vegan::scores(fit, display = "vectors"))
+  spp.scrs.B <- cbind(spp.scrs.B, Species = rownames(spp.scrs.B))
+  spp.scrs.B$pval <- fit$vectors$pvals
+  spp.scrs.B <- spp.scrs.B[spp.scrs.B$pval < 0.05, ]  # Filter significant vectors
+  #spp.scrs.B <- spp.scrs %>% filter(!Species %in% c("pH", "NO2", "NH4", "Nmin"))
+  
+  color <- c( "#E5F6DA", "#264612")
+  scrsB.meta$age_NA <-ifelse(is.na(scrsB.meta$age), 0, 1)
+  scrsB.meta$age_NA  <- as.factor(scrsB.meta$age_NA)
+  
+  b5 <-ggplot(scrsB.meta) +
+    geom_point(data = scrsB.meta[!is.na(scrsB.meta$age), ],
+               mapping = aes(x = NMDS1, y = NMDS2, fill = age), size = 4, shape=21) +
+    scale_fill_gradientn(colours = color,name= "Compost age [days]")+
+    geom_point(data = scrsB.meta[is.na(scrsB.meta$age), ],
+               aes(x = NMDS1, y = NMDS2), size = 4, fill = "white", colour ="gray73", shape = 21) +
+    coord_fixed(ratio =1) + ## need aspect ratio of 1!
+    geom_segment(data = spp.scrs.B,
+                 aes(x = 0, xend = 0.5*NMDS1, y = 0, yend = 0.5*NMDS2),
+                 arrow = arrow(length = unit(0.25, "cm")), colour = "darkred", size=0.8) +
+    geom_text(data = spp.scrs.B, aes(x = 0.6*NMDS1, y = 0.6*NMDS2, label = Species),
+              size = 4)+ bg_theme+
+    xlim(common_xlim)+ ylim(common_ylim)
+
+
+  # Fungi
+  
+  data.F <- ISS.bray.avg.comp.F[!rownames(ISS.bray.avg.comp.F) %in% c("K30"),
+                                !colnames(ISS.bray.avg.comp.F) %in% c("K30")]
+  nmds.BLW2.F <- metaMDS(data.F)
+  nmds.BLW2.points.F = nmds.BLW2.F$points %>% as.data.frame()
+  colnames(nmds.BLW2.points.F) = c("nmds1", "nmds2")
+  nmds.BLW2.points.F$treatment = rownames(nmds.BLW2.points.F)
+  df_BLW2.beta.F <- merge(df_BLW2.r, nmds.BLW2.points.F , by ="treatment")
+  nmds.BLW2.F$stress # 0.18
+  
+  find_hull <- function(df_BLW2.beta.F) df_BLW2.beta.F[chull(df_BLW2.beta.F$nmds1, df_BLW2.beta.F$nmds2), ]
+  hulls.F <- plyr::ddply(df_BLW2.beta.F, "site_ID", find_hull)
+  
+  f4 <-ggplot(data = df_BLW2.beta.F, aes(x = nmds1, y = nmds2))+
+    geom_point(aes(color = site_ID))+
+    bg_theme +
+    scale_fill_manual(values = site.colors.dark, name = "Composting\nsite")+
+    scale_color_manual(values = site.colors.dark, name = "Composting\nsite")+
+    geom_text(x=0.30,y=-0.29,label='stress = 0.18', size=4)+
+    geom_polygon(data=hulls.F,alpha=0.2,aes(fill=site_ID))+
+    ylab("NMDS2")+xlab("NMDS1")+
+    coord_fixed(ratio =1)+
+    xlim(-0.6, 0.5)+ ylim(-0.3, 0.55)+
+    geom_text_repel(data = df_BLW2.beta.F, aes(x = nmds1 , y = nmds2 , label = Number, color = site_ID), show.legend = FALSE, max.overlaps =20)
+  
+ 
+  scrsF <- as.data.frame(vegan::scores(nmds.BLW2.F, display = "sites"))
+  scrsF$treatment <- rownames(scrsF)
+  scrsF.meta <-merge(df_BLW2.r, scrsF, by = "treatment")
+  rownames(scrsF.meta) <- scrsF.meta$treatment; scrsF.meta$treatment<-NULL
+  
+  fit <- envfit(nmds.BLW2.F, df_BLW2.beta.F[,factor.continous[c(2:15,17)]], data = df_BLW2.beta.F, permutations = 999)
+  spp.scrs.F <- as.data.frame(vegan::scores(fit, display = "vectors"))
+  spp.scrs.F <- cbind(spp.scrs.F, Species = rownames(spp.scrs.F))
+  spp.scrs.F$pval <- fit$vectors$pvals
+  spp.scrs.F <- spp.scrs.F[spp.scrs.F$pval < 0.05, ]  # Filter significant vectors
+  #spp.scrs.F <- spp.scrs.F %>% filter(!Species %in% c("max_WHC", "pH", "OD550", "NH4", "NO3.Nmin"))
+  
+  color <- c( "#E5F6DA", "#264612")
+  scrsF.meta$age_NA <-ifelse(is.na(scrsF.meta$age), 0, 1)
+  scrsF.meta$age_NA  <- as.factor(scrsF.meta$age_NA)
+  
+  f5 <-ggplot(scrsF.meta) +
+    geom_point(data = scrsF.meta[!is.na(scrsF.meta$age), ],
+               mapping = aes(x = NMDS1, y = NMDS2, fill = age), size = 4, shape=21) +
+    scale_fill_gradientn(colours = color,name= "Compost age\n[days]")+
+    geom_point(data = scrsF.meta[is.na(scrsF.meta$age), ],
+               aes(x = NMDS1, y = NMDS2), size = 4, fill = "white", colour ="gray73", shape = 21) +
+    coord_fixed(ratio =1) + ## need aspect ratio of 1!
+    geom_segment(data = spp.scrs.F,
+                 aes(x = 0, xend = 0.8*NMDS1, y = 0, yend = 0.8*NMDS2),
+                 arrow = arrow(length = unit(0.25, "cm")), colour = "darkred", size=0.8) +
+    geom_text(data = spp.scrs.F, aes(x = 0.9*NMDS1, y = 0.9*NMDS2, label = Species),
+              size = 4)+ bg_theme+
+  xlim(-0.6, 0.5)+ ylim(-0.3, 0.55)
+  
+  legend4 <- ggpubr::get_legend(b4+ theme(legend.position = "bottom"))
+  legend5 <- ggpubr::get_legend(f5+ theme(legend.position = "bottom"))
+  
+  
+  p <-plot_grid(b4, f4,
+            b5, f5,
+            legend4, legend5,
+            ncol =2, nrow =3,
+            rel_widths = c(1.25,1), rel_heights = c(1,1,0.2),
+            labels = c("A", "B", "C", "D"))
+
+   #ggsave(p, filename = paste0(output_path, "Figure4_Beta_diversity.pdf"), height = 7, width= 10)
+
+  ## S15 Sup_betads-----
+ 
+  color = c("white", "black")
+  b1 <- ggplot(data = df_BLW2.beta.B, aes(x = nmds1, y = nmds2, color= rel.cp))+
+    theme_classic(base_size = 14) +
+    geom_point(aes(fill = rel.cp), size =4, pch=21, colour ="black")+
+    coord_fixed(ratio =1) +
+    theme(legend.position = "none", legend.title = element_text(size =12))+  ylab("NMDS2")+xlab("NMDS1")+
+    scale_fill_gradientn(colours = color,
+                         limits = c(15 ,110), name= "Relative\nbiomass [%]")
+  
+  b2 <- ggplot(data = df_BLW2.beta.B, aes(x = nmds1, y = nmds2, color= rel.cu.gu))+
+    theme_classic(base_size = 14) +
+    geom_point(aes(fill = rel.cu.gu), size =4, pch=21, colour="black")+
+    coord_fixed(ratio =1) +
+    theme(legend.position = "none", legend.title = element_text(size =12))+  ylab("NMDS2")+xlab("NMDS1")+
+    scale_fill_gradientn(colours = color,
+                         limits =c(15,110), name= "Relative\nbiomass [%]")
+  
+  b3 <- ggplot(data = df_BLW2.beta.B, aes(x = nmds1, y = nmds2, color= rel.cu.rs))+
+    theme_classic(base_size = 14) +
+    geom_point(aes(fill = rel.cu.rs), size =4, pch =21, colour="black")+
+    coord_fixed(ratio =1) + 
+    theme(legend.position = "none", legend.title = element_text(size =12))+  ylab("NMDS2")+xlab("NMDS1")+
+    scale_fill_gradientn(colours = color,
+                         limits = c(0,75),name= "Relative\nbiomass [%]")
+  
+  f1 <- ggplot(data = df_BLW2.beta.F, aes(x = nmds1, y = nmds2, color= rel.cp))+
+    theme_classic(base_size = 14) +
+    geom_point(aes(fill = rel.cp), size =4, pch=21, colour ="black")+
+    coord_fixed(ratio =1) +
+    theme(legend.position = "none", legend.title = element_text(size =12))+  ylab("NMDS2")+xlab("NMDS1")+
+    scale_fill_gradientn(colours = color,
+                         limits = c(15 ,110), name= "Relative\nbiomass [%]")
+  
+  f2 <- ggplot(data = df_BLW2.beta.F, aes(x = nmds1, y = nmds2, color= rel.cu.gu))+
+    theme_classic(base_size = 14) +
+    geom_point(aes(fill = rel.cu.gu), size =4, pch=21, colour="black")+
+    coord_fixed(ratio =1) +
+    theme(legend.position = "none", legend.title = element_text(size =12))+  ylab("NMDS2")+xlab("NMDS1")+
+    scale_fill_gradientn(colours = color,
+                         limits =c(15,110), name= "Relative\nbiomass [%]")
+  
+  f3 <- ggplot(data = df_BLW2.beta.F, aes(x = nmds1, y = nmds2, color= rel.cu.rs))+
+    theme_classic(base_size = 14) +
+    geom_point(aes(fill = rel.cu.rs), size =4, pch =21, colour="black")+
+    coord_fixed(ratio =1) + 
+    theme(legend.position = "none", legend.title = element_text(size =12))+  ylab("NMDS2")+xlab("NMDS1")+
+    scale_fill_gradientn(colours = color,
+                         limits = c(0,75),name= "Relative\nbiomass [%]]")
+  
+  legend1 <- ggpubr::get_legend(b1+ theme(legend.position = "right"))
+  legend2 <- ggpubr::get_legend(b2+ theme(legend.position = "right"))
+  legend3 <- ggpubr::get_legend(b3+ theme(legend.position = "right"))
+  legend4 <- ggpubr::get_legend(b4+ theme(legend.position = "right"))
+
+  
+  p <-plot_grid(b1, f1, legend1,
+            b2, f2, legend2,
+            b3, f3, legend3,
+            ncol =3, nrow =3, rel_widths = c(1,0.8,0.2),
+            rel_heights = c(1,1,1,1),
+            labels = c("A", "B", "", "C", "D", "", "E", "F", ""))
+  
+  #ggsave(p, filename = paste0(output_path, "Sup_betads.pdf" ), height= 9, width= 10)
+  
+  rm(find_hull, hulls.B, data.B, nmds.BLW2.points.B, nmds.BLW2.B, df_BLW2.beta.B, b4,
+     data.F, nmds.BLW2.F, nmds.BLW2.points.F, df_BLW2.beta.F, hulls.F, f4,
+     color, b1, b2,b3, f1, f2, f3, legend1, legend2, legend3, legend4,p )
+
+  ## Sup11 Sup_betaall----
+  
+  # Bacteria
+  nmds.BLW2.B <- metaMDS(ISS.bray.B)
+  nmds.BLW2.points.B = nmds.BLW2.B$points %>% as.data.frame()
+  colnames(nmds.BLW2.points.B) = c("nmds1", "nmds2")
+  df_BLW2.beta.B <- merge(design.BLW2, nmds.BLW2.points.B , by =0)
+  rownames(df_BLW2.beta.B) <- df_BLW2.beta.B$Row.names; df_BLW2.beta.B$Row.names <-NULL
+  nmds.BLW2.B$stress # 0.06
+  
+  # Plot
+  
+  df_BLW2.beta.B$compost_ID <-droplevels(df_BLW2.beta.B$compost_ID)
+  levels <- compost_ID%>% filter(!treatment %in% compost.exclude) %>% pull(compost_ID) %>% as.character()
+  df_BLW2.beta.B$compost_ID<- factor(df_BLW2.beta.B$compost_ID, levels=levels)
+  
+  levels <- compost_ID %>% pull(compost_ID) %>% as.character()
+  compost_ID$compost_ID<- factor(compost_ID$compost_ID, levels=levels)
+  rm(levels)
+  
+  new_values <- c(rep("NC1", 4), rep("NC2", 4), rep("Nc3", 4), rep("Nc4", 4))
+  
+  # Get the indices of the rows where Number is "S"
+  indices <- which(df_BLW2.beta.B$Number == "S")
+  
+  # Assign new values to those indices
+  df_BLW2.beta.B$Number[indices[1:length(new_values)]] <- new_values
+  
+  find_hull <- function(df_BLW2.beta.B) df_BLW2.beta.B[chull(df_BLW2.beta.B$nmds1, df_BLW2.beta.B$nmds2), ]
+  hulls <- plyr::ddply(df_BLW2.beta.B, "Number", find_hull)
+  
+  
+  
+  centroids <- plyr::ddply(hulls, "Number", summarise, 
+                           nmds1 = mean(nmds1), 
+                           nmds2 = mean(nmds2))
+  
+  b1 <-ggplot(data = df_BLW2.beta.B, aes(x = nmds1, y = nmds2))+
+    geom_point(aes(color = Number))+
+    theme_classic(base_size = 14) + theme(legend.position = "right") +
+    geom_text(x=0.7,y=-0.13, label='stress = 0.06', size=4)+
+    ylab("NMDS2")+xlab("NMDS1")+
+    theme(legend.position = "none")+
+    geom_polygon(data=hulls,alpha=0.2,aes(fill=Number))+
+    geom_text(data=centroids, aes(label=Number), size=3)+
+    coord_fixed(ratio =1)
+  
+  b2 <-ggplot(data = df_BLW2.beta.B, aes(x = nmds1, y = nmds2))+
+    geom_point(aes(color = Number))+
+    theme_classic(base_size = 14) + theme(legend.position = "right") +
+    geom_text(x=0.7,y=-0.13, label='stress = 0.06', size=4)+
+    ylab("NMDS2")+xlab("NMDS1")+
+    theme(legend.position = "none")+
+    geom_polygon(data=hulls,alpha=0.2,aes(fill=Number))+
+    geom_text(data=centroids, aes(label=Number), size=3)+
+    ylim(-0.15, 0.09) + xlim(-0.15, 0.06)+
+    coord_fixed(ratio =1)
+
+  # Fungi
+  nmds.BLW2.F <- metaMDS(ISS.bray.F)
+  nmds.BLW2.points.F = nmds.BLW2.F$points %>% as.data.frame()
+  colnames(nmds.BLW2.points.F) = c("nmds1", "nmds2")
+  df_BLW2.beta.F <- merge(design.BLW2, nmds.BLW2.points.F , by =0)
+  rownames(df_BLW2.beta.F) <- df_BLW2.beta.F$Row.names; df_BLW2.beta.F$Row.names <-NULL
+  nmds.BLW2.F$stress # 0.07
+  
+  # Plot
+  
+  df_BLW2.beta.F$compost_ID <-droplevels(df_BLW2.beta.F$compost_ID)
+  levels <- compost_ID%>% filter(!treatment %in% compost.exclude) %>% pull(compost_ID) %>% as.character()
+  df_BLW2.beta.F$compost_ID<- factor(df_BLW2.beta.F$compost_ID, levels=levels)
+  
+  levels <- compost_ID %>% pull(compost_ID) %>% as.character()
+  compost_ID$compost_ID<- factor(compost_ID$compost_ID, levels=levels)
+  rm(levels)
+  
+  new_values <- c(rep("NC1", 4), rep("NC2", 4), rep("Nc3", 4), rep("Nc4", 4))
+  
+  # Get the indices of the rows where Number is "S"
+  indices <- which(df_BLW2.beta.F$Number == "S")
+  
+  # Assign new values to those indices
+  df_BLW2.beta.F$Number[indices[1:length(new_values)]] <- new_values
+  
+  find_hull <- function(df_BLW2.beta.F) df_BLW2.beta.F[chull(df_BLW2.beta.F$nmds1, df_BLW2.beta.F$nmds2), ]
+  hulls <- plyr::ddply(df_BLW2.beta.F, "Number", find_hull)
+  
+  centroids <- plyr::ddply(hulls, "Number", summarise, 
+                           nmds1 = mean(nmds1), 
+                           nmds2 = mean(nmds2))
+  
+  f1 <-ggplot(data = df_BLW2.beta.F, aes(x = nmds1, y = nmds2))+
+    geom_point(aes(color = Number))+
+    theme_classic(base_size = 14) + theme(legend.position = "right") +
+    geom_text(x=0.7,y=0, label='stress = 0.07', size=4)+
+    ylab("NMDS2")+xlab("NMDS1")+
+    theme(legend.position = "none")+
+    geom_polygon(data=hulls,alpha=0.2,aes(fill=Number))+
+    geom_text(data=centroids, aes(label=Number), size=3)+
+    coord_fixed(ratio =1)
+  
+  
+  f2 <-ggplot(data = df_BLW2.beta.F, aes(x = nmds1, y = nmds2))+
+    geom_point(aes(color = Number))+
+    theme_classic(base_size = 14) + theme(legend.position = "right") +
+    geom_text(x=0.7,y=-0.13, label='stress = 0.07', size=4)+
+    ylab("NMDS2")+xlab("NMDS1")+
+    theme(legend.position = "none")+
+    geom_polygon(data=hulls,alpha=0.2,aes(fill=Number))+
+    geom_text(data=centroids, aes(label=Number), size=3)+
+    ylim(-0.1, 0.05) + xlim(-0.15, -0.05)+
+    coord_fixed(ratio =1)
+  
+  
+  # Combined plot
+  p <-plot_grid(b1, b2, 
+            f1, f2,
+            ncol =2, nrow =2, rel_widths = c(1,0.7),
+            rel_heights = c(1,1),
+            labels = c("A", "B", "C",  "D"))
+  
+  #ggsave(p, filename= paste0(output_path, "Sup_betaall.pdf"), height=6, width=7)
+  
+  
+
+# Indicator Species Analysis----
+  ## Figure 5-----
+  
+  # Create function that generates the plot based on ASV input and fasta file
+  
+  path1 <-"output/Indicator_species_analysis/Bacteria/"
+  
+  cress <- read.csv(file = paste0(path1, "cress_cut_method_comparison.csv"), sep =";")%>%
+    filter(Freq > 1)
+  cugu <- read.csv(file = paste0(path1, "cugu_cut_method_comparison.csv"), sep =";")%>%
+    filter(Freq > 1)
+  curs <- read.csv(file = paste0(path1, "curs_cut_method_comparison.csv"), sep =";")%>%
+    filter(Freq > 1)
+  
+  all <- read.csv(file = paste0(path1, "comparisons_cut_path_plants_systems.csv"), sep =";") %>%
+    filter(comparison %in% c(2))
+  
+  colors <- data.frame(color = c(
+    "beige", "#6495ED", "olivedrab",  "lightblue",
+    "darksalmon", "darkred", "violet", "#BFEF45", "orange3",
+    "coral4", "plum4","mistyrose" , "sienna", "darkslategrey",
+    "mediumaquamarine", "#808000", "lemonchiffon4",  "#A9A9A9", "#000075"),
+    phlya = c(unique(cress$Phyla), unique(cugu$Phyla), unique(curs$Phyla)) %>% unique() %>% sort() )
+  
+  ASV_present_all <-all %>% filter(assay_combination == "cress_cugu_curs") %>% dplyr::select(ASV) 
+  ASV_all = all %>% filter(ASV %in% ASV_present_all$ASV & assay_combination == "cress_cugu_curs")
+  all =all %>% filter(!ASV %in% ASV_present_all$ASV)
+  all = rbind(all, ASV_all)
+  all$BLW1_all = all$BLW1
+  all$BLW1 <-NULL; rm(ASV_present_all, ASV_all)
+  
+  #All the pathogen-plant system separatly
+  clade_colors  <- colors %>% filter(phlya %in% unique(cress$Phyla)) %>% dplyr::select(color)
+  phylo_tree_cress <- phylo_tree_ASV_flat(cress, sequences, clade_colors, all=FALSE, size =2.5, xlim.factor = 2.5)
+  p2 <-ggarrange(phylo_tree_cress[[2]], phylo_tree_cress[[3]], ncol =2, nrow =1, widths = c(0.8, 0.4))
+  #ggsave(p2, filename= "figure/GU_cress_phylogenetical_tree.png", height = 14, width =6, unit ="in")
+  
+  
+  clade_colors  <- colors %>% filter(phlya %in% unique(cugu$Phyla)) %>% dplyr::select(color)
+  phylo_tree_cugu <- phylo_tree_ASV_flat(cugu, sequences, clade_colors, all=FALSE, size =2.5, xlim.factor = 2.5)
+  p2 <-ggarrange(phylo_tree_cugu[[2]], phylo_tree_cugu[[3]], ncol =2, nrow =1, widths = c(0.8, 0.4))
+  #ggsave(p2, filename= "figure/GU_cugu_phylogenetical_tree.png", height = 15, width =6, unit ="in")
+  
+  clade_colors  <- colors %>% filter(phlya %in% unique(curs$Phyla)) %>% dplyr::select(color)
+  phylo_tree_curs <- phylo_tree_ASV_flat(curs, sequences,clade_colors, all=FALSE, size =2.5, xlim.factor = 2.5)
+  p2 <-ggarrange(phylo_tree_curs[[2]], phylo_tree_curs[[3]], ncol =2, nrow =1, widths = c(0.8, 0.4))
+  #ggsave(p2, filename= "figure/GU_curs_phylogenetical_tree.png", height = 12, width =6, unit ="in")
+  
+  # Define prefixes
+  prefixes <- c(Class = "c_", Order = "o_", Family = "f_", Genus = "g_", Species = "s_")
+  
+  # Apply prefixes conditionally: only if the entry does not contain "unclassified"
+  all <- all %>%
+    mutate(across(all_of(names(prefixes)), 
+                  ~ ifelse(grepl("unclassified", ., ignore.case = TRUE), ., paste0(prefixes[cur_column()], .))))
+  
+  
+  # only GU-comparison
+  all <- all %>% filter(assay_combination %in% c("cress_cugu", "cress_cugu_rs"))
+  
+  clade_colors = colors %>% filter(phlya %in% unique(all$Phyla)) %>% dplyr::select(color)
+  phylo_tree_all <- phylo_tree_ASV_flat(all, sequences, clade_colors, all=FALSE, size =4, xlim.factor = 2.6)
+  phylo_tree_all_l <-ggdraw(phylo_tree_all[[2]]+ draw_plot(phylo_tree_all[[3]],2, 33, 0, 0))
+  
+  # Add heat map
+  
+  asv_names <- all$ASV
+  #ds <- c("rel.cp", "rel.cu.gu", "rel.cu.rs")
+  ds <- c("rel.cp", "rel.cu.gu")
+  tip_order <-phylo_tree_all[[2]]$data %>%
+    filter(isTip) %>%
+    arrange(y) %>%
+    pull(label)
+  
+  heatmap <-heatmap_all_red(ISS.rob.comp.avg.B, asv_names, ds, tip_order, size=10, adjustcor = TRUE)
+  heatmap <-heatmap_all_red_gu(ISS.rob.comp.avg.B, asv_names, ds, tip_order, size=10, adjustcor = TRUE)
+  heatmap_grob <- grid::grid.grabExpr(draw(heatmap[[1]]))
+  
+  empty_plot <- ggplot() + theme_void() 
+  combined_plot1 <- cowplot::plot_grid(phylo_tree_all_l, empty_plot, nrow =2, ncol =1, rel_heights = c(1, 0.055)) 
+  combined_plot2 <- cowplot::plot_grid(empty_plot, heatmap_grob , nrow =2, ncol =1, rel_heights = c(0.005, 1))
+
+  combined_plot3 <- cowplot::plot_grid(combined_plot1, combined_plot2, ncol = 2,
+                                       rel_widths = c(2,0.6)) 
+  
+  ggsave(combined_plot3, filename = paste0(output_path, "Figure5_Indicator_analysis.pdf"),
+         height = 10, width = 6.7)
+  # Which ones of the combined assays are also correlated with disease suppression?
+  cor_data <-heatmap[[2]]
+  select <-cor_data %>% filter(rho.sig.cress > 0.4 & rho.sig.cugu > 0.4) 
+  select <-cor_data %>% filter(rho.sig.cress > 0.4 & rho.sig.curs > 0.4) 
+  select <-cor_data %>% filter(rho.sig.cugu > 0.4 & rho.sig.curs > 0.4) 
+  select[rownames(select) %in% c("ASV523", "ASV1594", "ASV749", "ASV1370", "ASV2887", "ASV891"),]
+
+  
+  ## Table Indicator Analysis------
+  
+  pathplant <- c("cress", "cugu", "curs")
+  ds <- c("rel.cp", "rel.cu.gu", "rel.cu.rs")
+  methods <- c("PBC", "ISA", "MAASLIN", "ALDEX")
+  label <- c("cress-Gu", "cucumber-Gu", "cucumber-Rs")
+
+  output <- list()
+  microbe <- "Bacteria"
+  #microbe <- "Fungi"
+
+  for (path in 1:3) {
+    path1 <-paste0("output/Indicator_species_analysis/", microbe , "/")
+    list <- list()
+    for (j in 1:length(methods)) {
+      list[[j]] <- read.csv(file =paste0(path1, pathplant[path], "_cut_", methods[j], ".csv"))
+    }
+    list[[5]] <- read.csv(file = paste0(path1, pathplant[path], "_cut_method_comparison.csv"))
+    
+    if(list[[5]] %>% ncol <2) {
+      list[[5]] <- read.csv(file = paste0(path1, pathplant[path], "_cut_method_comparison.csv"), sep =";")
+      list[[5]] <- list[[5]] %>% dplyr::rename(X = ASV)
+      
+    }
+    asv_names <- list[[5]] %>% filter(Freq >1) %>% pull(X)
+    
+    if (microbe == "Bacteria") {
+      output[[path]] <-table_ind(ISS.rob.comp.avg.B, tax.class.red.B, asv_names, ds[path], list =list)
+    }
+    
+    if (microbe == "Fungi") {
+      output[[path]] <-table_ind(ISS.rob.comp.avg.F, tax.class.red.F, asv_names, ds[path], list =list)
+    }
+    
+    #write.csv(output[[path]], file = paste0(path1, pathplant[path], "_cut_summary.csv"), row.names = FALSE)
+    
+  }
+  
+  
+  if (microbe =="Fungi") {
+    #write.csv(do.call(rbind, output), file = paste0(path1, "All_cut_summary.csv"), row.names = FALSE)
+  }
+
+            
+  ## Figure 6----
+  output <- list()
+  plot <- FALSE
+  ordination <- FALSE
+  correlation <- TRUE 
+  microbe <- "Bacteria"
+  #microbe <- "Fungi"
+  read_sum <-ISS.rob.comp.avg.B %>% colSums() %>% as.data.frame()
+  
+  plot_list <- list()
+  mean_abundance <- list()
+  for (path in 1:3) {
+    path1 <-paste0("output/Indicator_species_analysis/", microbe , "/")
+    list <- list()
+    for (j in 1:length(methods)) {
+      list[[j]] <- read.csv(file =paste0(path1, pathplant[path], "_cut_", methods[j], ".csv"))
+    }
+    list[[5]] <- read.csv(file = paste0(path1, pathplant[path], "_cut_method_comparison.csv"))
+    
+    if(list[[5]] %>% ncol <2) {
+      list[[5]] <- read.csv(file = paste0(path1, pathplant[path], "_cut_method_comparison.csv"), sep =";")
+      list[[5]] <- list[[5]] %>% dplyr::rename(X = ASV)
+      
+    }
+    asv_names <- list[[5]] %>% filter(Freq >1) %>% pull(X)
+    sorted_asv <- asv_names[order(as.numeric(gsub("ASV", "", asv_names)))]
+  
+    # merge with beta diversity file
+    if (microbe == "Bacteria") {
+      data_asv_names <-ISS.rob.comp.avg.B[sorted_asv,] %>% t() %>% as.data.frame()
+    }
+    if (microbe == "Fungi") {
+      data_asv_names <-ISS.rob.comp.avg.F[sorted_asv,] %>% t() %>% as.data.frame()
+    }
+
+    data_asv_names$treatment <- rownames(data_asv_names)
+    df_BLW_asv <- merge(df_BLW2.r[, c("treatment", "Number","batch","site", "gp.cp",factor.continous, ds[path])],data_asv_names, by ="treatment")
+    df_BLW_asv <-df_BLW_asv %>% mutate(category = case_when(
+      Number %in% top[[path]] ~"top",
+      Number %in% flop[[path]] ~"flop",
+      .default = "intermediate"))
+    
+    df_BLW_asv <-df_BLW_asv %>% mutate(sig = case_when(
+      Number %in% sig[[path]] ~"sig",
+      .default = "nonsig"))
+    
+    
+    # Create an ordination plot of the indiacative ASVs
+    
+    if (ordination == TRUE) {
+      
+      df_BLW_asv$y <- df_BLW_asv[, ds[path]]
+
+      # Apply rescale to each row for only ASV columns
+      compost_data_scaled <- df_BLW_asv %>%
+        mutate(across(all_of(sorted_asv), ~ scales::rescale(.)))
+      
+      # Step 2: Perform PCA on scaled ASV columns
+      asv_scaled_matrix <- compost_data_scaled %>%
+        select(all_of(sorted_asv)) %>%
+        as.matrix()
+      
+      # Perform PCA ordination (you can also use NMDS or other methods if needed)
+      pca_result <- prcomp(asv_scaled_matrix, scale. = FALSE)
+      
+      # Step 3: Prepare the data for ggplot2
+      # Extract PCA coordinates
+      ordination_scores <- as.data.frame(pca_result$x)
+      
+      # Combine ordination scores with compost_data information
+      ordination_data <- df_BLW_asv %>%
+        select(treatment, y, category) %>%
+        bind_cols(ordination_scores)
+      
+      ordination_plot <- ggplot(ordination_data, aes(x = PC1, y = PC2)) +
+        geom_point(size = 4,  aes(color = y, shape =category)) +          
+        scale_color_gradient(low = "white", high = "black") +  
+        bg_theme +                    
+        labs(x = "PC1",
+             y = "PC2",
+             color = "Relative biomass[%]")+
+      geom_text_repel(data = ordination_data, aes(x = PC1 , y = PC2 , label = treatment),
+                      show.legend = FALSE, max.overlaps =20)
+      
+      #ggsave(ordination_plot, filename =paste0(path1, "ordination_ind_ASVs_", pathplant[path], ".png"), height =6, width=8 )
+      
+    }
+    if (correlation == TRUE) {
+      
+      df_BLW_asv$y <- df_BLW_asv[, ds[path]]
+      
+      # Apply rescale to each row for only ASV columns
+      compost_data_scaled <- df_BLW_asv %>%
+        mutate(across(all_of(sorted_asv), ~ scales::rescale(.)))
+      
+
+      asv_scaled_matrix <- compost_data_scaled %>%
+        select(all_of(sorted_asv)) %>%
+        as.matrix()
+      
+      df_BLW_asv$ASVsum <- rowSums(asv_scaled_matrix)
+      
+      ordination_plot <- ggplot(df_BLW_asv, aes(x = y, y = ASVsum, label = Number)) +
+        geom_point(size =4, aes(shape = category, color =sig))+
+        scale_colour_manual(values = c("darkgrey", "black"), labels = c("non-suppressive", "suppressive")) +  
+        #scale_colour_gradient(low = "red", high = "green")+
+        theme_classic()+
+        theme(legend.position = "none",
+          axis.text.x = element_text(angle = 0, hjust = 0.3, vjust = 0, size = 12, color ="black"),
+          axis.text.y = element_text(size = 12, color ="black"),
+          text = element_text(size = 12, color ="black"),
+          axis.title = element_text(size=12),
+          legend.text = element_text(size=12))+
+        labs(colour='Category', shape = "Category")+
+        ylab("Summed ASV abundance")+
+        xlab(paste0(label[path], "\nRelative biomass[%]"))+
+        geom_text_repel( show.legend = FALSE, max.overlaps =20)+
+        geom_smooth(method ="lm", se =FALSE, color ="darkred", alpha = 0.99)
+      
+      plot_list[[path]] <-ordination_plot
+      
+      cor <-cor.test(df_BLW_asv$y, df_BLW_asv$ASVsum, method ="spearman")
+      print(cor)
+      
+      model <-lm(y ~ basal*ASVsum, data = df_BLW_asv)
+      summary(model) %>% print()
+      
+      # Print the plot
+      #ggsave(ordination_plot, filename =paste0(path1, "correlation_ind_ASVs_", pathplant[path], ".png"), height =6, width=8 )
+      
+      # Average of indicative ASVs overall, non-suppressive composts, suppressive composts
+      m_ab_ind_ASV <- ((df_BLW_asv %>% select(all_of(sorted_asv))) / read_sum[,1]*100) %>% colMeans() %>% as.data.frame()
+      colnames(m_ab_ind_ASV)<- c("overall")
+      m_ab_ind_ASV$sig <- ((df_BLW_asv %>% filter(sig =="sig") %>% select(all_of(sorted_asv))) / read_sum[,1]*100) %>%
+        colMeans()
+      m_ab_ind_ASV$nonsig <- ((df_BLW_asv %>% filter(sig == "nonsig") %>% select(all_of(sorted_asv))) / read_sum[,1]*100) %>%
+        colMeans()
+      m_ab_ind_ASV$ratio <- m_ab_ind_ASV$sig/m_ab_ind_ASV$nonsig # ration sig-suppressive vs. non-suppressive
+      m_ab_ind_ASV$ncompost <- (df_BLW_asv %>% select(all_of(sorted_asv)) > 0) %>% colSums() 
+      mean_abundance[[path]] <- m_ab_ind_ASV %>% round(4)
+          }
+    if (plot == TRUE) {
+      
+      interactive_plot <- plot_ly()
+      
+      # Loop through each bacterium and add a trace for each scatter plot
+      for (bacteria in names(df_BLW_asv)[grep("ASV", names(df_BLW_asv))]) {
+        interactive_plot <- add_trace(
+          interactive_plot,
+          x = df_BLW_asv[[bacteria]],  # Bacteria abundance
+          y = df_BLW_asv[,ds[path]],  # Disease suppression
+          mode = "markers",  # Scatter plot
+          name = bacteria,  # Name of the bacterium for the legend
+          text = df_BLW_asv$treatment,  # Treatment labels for hover
+          hoverinfo = "text+x+y",  # Display treatment name, x, and y on hover
+          visible = TRUE  # Make all traces visible so that users can interact with them
+        )
+      }
+      
+      # Define the layout, including legend position
+      interactive_plot <- plotly::layout(
+        interactive_plot,
+        title = "Bacteria Abundance vs Disease Suppression",
+        xaxis = list(title = "Bacteria Abundance"),
+        yaxis = list(title = "Disease Suppression"),
+        hovermode = "closest",  # Hover mode to show treatment labels
+        showlegend = TRUE,  # Display the legend on the right
+        legend = list(
+          x = 1.05,  # Place legend on the right
+          y = 0.5,
+          traceorder = "normal",  # Keep the order of traces (bacteria) as-is
+          title = list(text = "<b>Bacteria</b>"),  # Title for the legend
+          bordercolor = "black",
+          borderwidth = 1
+        )
+      )
+      if(microbe == "Bacteria") {
+        htmlwidgets::saveWidget(interactive_plot, paste0(path1, "interactive_plot_B_",pathplant[path],".html"))
+      }
+      
+      if (microbe == "Fungi") {
+        htmlwidgets::saveWidget(interactive_plot, paste0(path1, "interactive_plot_F_",pathplant[path],".html"))
+      } 
+    }
+  }
+  
+  legend <- get_legend(plot_list[[1]] + theme(legend.position = "right", legend.title = element_text(face ="bold")))
+  combined_plot4 <-cowplot::plot_grid(plot_list[[1]], plot_list[[2]], plot_list[[3]],legend,
+                     ncol = 2, nrow=2, labels = c("A", "B", "C", ""))
+  
+  #ggsave(filename = paste0(output_path, "Figure_6_ASVab.pdf"), height =7.5, width =8)
+  
+  ## S17 Sup_ab_indASV-----
+  
+  cress_ab <- mean_abundance[[1]]
+  cress_ab$ASV <- rownames(cress_ab); rownames(cress_ab) <-NULL
+  cress_ab$pathplant <-"cress"
+  cugu_ab <- mean_abundance[[2]]
+  cugu_ab$ASV <- rownames(cugu_ab); rownames(cugu_ab) <-NULL
+  cugu_ab$pathplant <- "cugu"
+  curs_ab <- mean_abundance[[3]]
+  curs_ab$ASV <- rownames(curs_ab); rownames(curs_ab) <-NULL
+  curs_ab$pathplant <- "curs"
+
+  all_ab <-rbind(cress_ab, cugu_ab, curs_ab)
+  all_ab$overall.log <- log10(all_ab$overall)
+  all_ab$ratio.log <- log10(all_ab$ratio)
+  all_ab$overall.mean.comp <- all_ab$overall *37 /all_ab$ncompost
+  all_ab$overall.mean.comp.log <- log10(all_ab$overall.mean.comp)
+  all_ab$sig.log <-log10(all_ab$sig/100)
+  all_ab$nonsig.log <-log10(all_ab$nonsig/100)
+  
+  #Statistics, not normal distributed therefore non-parametric statistics
+  kruskal_results <- kruskal.test(ncompost ~ pathplant, data = all_ab)
+  pairwise_results <- pairwise.wilcox.test(all_ab$ncompost, all_ab$pathplant, p.adjust.method = "BH")
+  KRUSKAL <-tri.to.squ(pairwise_results$p.value)
+  letters_ncompost <-multcompLetters(KRUSKAL)
+  
+  kruskal_results <- kruskal.test(overall ~ pathplant, data = all_ab)
+  pairwise_results <- pairwise.wilcox.test(all_ab$overall, all_ab$pathplant, p.adjust.method = "BH")
+  KRUSKAL <-tri.to.squ(pairwise_results$p.value)
+  letters_overall <-multcompLetters(KRUSKAL)
+  
+  kruskal_results <- kruskal.test(ratio ~ pathplant, data = all_ab)
+  pairwise_results <- pairwise.wilcox.test(all_ab$ratio, all_ab$pathplant, p.adjust.method = "BH")
+  KRUSKAL <-tri.to.squ(pairwise_results$p.value)
+  letters_ratio <-multcompLetters(KRUSKAL)
+  
+  kruskal_results <- kruskal.test(overall.mean.comp ~ pathplant, data = all_ab)
+  pairwise_results <- pairwise.wilcox.test(all_ab$overall.mean.comp, all_ab$pathplant, p.adjust.method = "BH")
+  KRUSKAL <-tri.to.squ(pairwise_results$p.value)
+  letters_overall_mean <-multcompLetters(KRUSKAL)
+  
+  kruskal_results <- kruskal.test(sig.log ~ pathplant, data = all_ab)
+  pairwise_results <- pairwise.wilcox.test(all_ab$sig.log, all_ab$pathplant, p.adjust.method = "BH")
+  KRUSKAL <-tri.to.squ(pairwise_results$p.value)
+  letters_sig_mean <-multcompLetters(KRUSKAL)
+  
+  kruskal_results <- kruskal.test(nonsig.log ~ pathplant, data = all_ab)
+  pairwise_results <- pairwise.wilcox.test(all_ab$nonsig.log, all_ab$pathplant, p.adjust.method = "BH")
+  KRUSKAL <-tri.to.squ(pairwise_results$p.value)
+  letters_nonsig_mean <-multcompLetters(KRUSKAL)
+
+  
+  # Not normal distributed: use non-numeric statistics? Or stronger transformation?
+  
+  all_ab$pathplant <- as.factor(all_ab$pathplant)
+  # Plots
+  
+  plot_with_labels_no_whiskers <- function(data, y_var, labels, y_offset, ylab) {
+    ggplot(data = data, aes(x = pathplant, y = .data[[y_var]], fill =pathplant)) + 
+      geom_boxplot() + 
+      geom_text(data = data.frame(pathplant = levels(data$pathplant), label = labels),
+                aes(x = pathplant, y = max(data[[y_var]], na.rm = TRUE) + y_offset, label = label),
+                vjust = -0.5) +
+      labs(y = ylab, x ="")+
+      scale_x_discrete(labels = x_labels) + 
+      scale_fill_manual("Plant-pathogen system", values =c("#DEEBF7", "#E2F0DA", "#FCE5D6"), labels = x_labels)+
+      bg_theme+
+      theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+  }
+  
+  x_labels <- c("cress-\nG. ultimum", "cucumber-\nG. ultimum", "cucumber-\n-R. solani")
+  
+  plot1 <- plot_with_labels_no_whiskers(all_ab, "ncompost", letters_ncompost$Letters,
+                                        0.5, "Number of composts")
+  plot2 <- plot_with_labels_no_whiskers(all_ab, "sig.log", letters_sig_mean$Letters,
+                                        0.5, "Log10(mean ASV abundance)")+ylim(-6,-1)
+  plot3 <- plot_with_labels_no_whiskers(all_ab, "nonsig.log", letters_nonsig_mean$Letters,
+                                        0.5, "Log10(mean ASV abundance)")+ylim(-6,-1)
+  #plot2 <- plot_with_labels_no_whiskers(all_ab, "overall.log", letters_overall_mean$Letters,
+  #                                      0.1, "Log10(mean ASV abundance)")
+  #plot3 <- plot_with_labels_no_whiskers(all_ab, "ratio.log",
+  #                                      letters_ratio$Letters, 0.1, "Log10(ratio)")
+  
+  
+  legend <- get_legend(plot1 + theme(legend.position = "bottom", legend.title = element_text(face ="bold")))
+  combined_plot <-cowplot::plot_grid(plot1, plot2, plot3,
+                                      ncol = 3, nrow=1, labels = c("A", "B", "C"))
+  
+  combined_plot2 <-cowplot::plot_grid(combined_plot, legend, ncol=1, nrow =2, rel_heights = c(1,0.1))
+   #ggsave(combined_plot2, file = paste0(output_path, "Sup_ab_indASV.pdf"), width = 10, height = 4 )
+  
+  
+  # Summary abundance ASVs in general
+  avg_abundance <-((ISS.rob.comp.avg.B %>% t()) / read_sum[,1]*100) %>% colMeans() %>% as.data.frame()
+  colnames(avg_abundance) <- c("abundance")
+  summary(avg_abundance$abundance)
+  quantile(avg_abundance$abundance, probs = c(0.75, 0.8, 0.9, 0.95, 0.99))
+  
+  # Agerages and ranges for the indicative ASVs
+  cress_ab$overall %>% range()
+  cress_ab %>% filter(overall>0.092)
+  cress_ab %>% filter(overall<0.007) %>% nrow()
+  cress_ab$ratio %>% range()
+  
+  cugu_ab$overall %>% range()
+  cugu_ab %>% filter(overall>0.092) 
+  cugu_ab %>% filter(overall<0.007) %>% nrow()
+  cugu_ab$ratio %>% range()
+  
+  curs_ab$overall %>% range()
+  curs_ab%>% filter(overall>0.092)
+  curs_ab %>% filter(overall<0.007) %>% nrow()
+  curs_ab$ratio %>% range()
+  
+# Other analysis-----
+  ## Number of ASVs considered in the analysis-----
+  composts <-df_BLW2.r %>% filter(Number %in% c(top[[1]], flop[[1]])) %>% pull(treatment)
+  asv.composts <-ISS.rob.comp.avg.F %>% as.data.frame() %>% select(all_of(composts))
+  asv.composts[ifelse(asv.composts <1, 0, 1) %>% rowSums() > 5,] %>% nrow()
+  
+  rm(composts,asv.composts )
+  
+  ## FASTA sequence indicative ASVs----
+  
+ # Load cress, cugu and curs under Figure 5
+ 
+ write.fasta(sequences = sequences[cress$ASV], names =  names(sequences[cress$ASV]),
+             file.out = "output/Indicator_species_analysis/Bacteria/ind_cress.fasta")
+ 
+ write.fasta(sequences = sequences[cugu$ASV], names =  names(sequences[cugu$ASV]),
+             file.out = "output/Indicator_species_analysis/Bacteria/ind_cugu.fasta")
+ 
+ write.fasta(sequences = sequences[curs$ASV], names =  names(sequences[curs$ASV]),
+             file.out = "output/Indicator_species_analysis/Bacteria/ind_curs.fasta")
+
+ 
+  ## Known biocontrol strains----
+  
+  # Mean abundance selected indicative ASVS
+  top =c("K14", "K15", "K23", "K26", "K36", "K44", "K46", "K47", "K48")
+  ASVs <- c("ASV8464", "ASV10", "ASV3699" )
+  
+  
+  ISS.rob.comp.avg.TSS <-prop.table(ISS.rob.comp.avg, margin = 2) * 100
+  ISS.rob.comp.avg.TSS[ASVs, top] %>% t() %>% summary()
+  
+  ISS.rob.comp.avg.B.TSS <-prop.table(ISS.rob.comp.avg.B, margin = 2) * 100
+  ISS.rob.comp.avg.F.TSS <-prop.table(ISS.rob.comp.avg.F %>% as.matrix(), margin = 2) * 100
+  ISS.rob.avg.F <- read.table(file ="data/10000_reads/ISS.rob.avg.txt") %>%
+    as.matrix()%>% prop.table(margin=2)*100
+  
+  biocontrol.B <-tax.class.red.B %>% filter(grepl("Bacillus", Genus))
+  biocontrol.B <-tax.class.red.B %>% filter(grepl("Pseudomonas", Genus))
+  biocontrol.B <-tax.class.red.B %>% filter(grepl("Streptomyces", Genus))
+  
+    biocontrol.ASVs <-intersect(ISS.rob.comp.avg.B.TSS %>% rownames(), biocontrol.B %>% rownames())
+  ISS.rob.comp.avg.B.TSS[biocontrol.ASVs,] %>% colSums() %>% sort() %>% as.data.frame()
+  
+
+  biocontrol.F <-tax.class.red.F %>% filter(grepl("Trichoderma", Genus))
+  biocontrol.ASVs <-intersect(ISS.rob.avg.F %>% rownames(), biocontrol.F %>% rownames())
+  results <-ISS.rob.avg.F[biocontrol.ASVs,] %>% colSums() %>% sort() %>% as.data.frame()
+  results[grepl("S", rownames(results)),] %>% mean()
+  results[grepl("K", rownames(results)),] %>% mean()
+
+
+  
+  ## Co-occuarance network-----
+
+library(igraph)
+asv_data <-ISS.rob.comp.avg.B[cress$ASV,] %>% as.data.frame() %>% t()
+select <-df_BLW2.r %>% filter(Number %in% flop[[1]]) %>% pull(treatment)
+select <-df_BLW2.r %>% filter(Number %in% top[[1]]) %>% pull(treatment)
+select <-df_BLW2.r %>% filter(Number %in% sig[[1]]) %>% pull(treatment)
+asv_data <-asv_data[select,]
+
+asv_data <-ISS.rob.comp.avg.B[cugu$ASV,] %>% as.data.frame() %>% t()
+select <-df_BLW2.r %>% filter(Number %in% flop[[2]]) %>% pull(treatment)
+select <-df_BLW2.r %>% filter(Number %in% sig[[2]]) %>% pull(treatment)
+select <-df_BLW2.r %>% filter(Number %in% top[[2]]) %>% pull(treatment)
+
+asv_data <-asv_data[select,]
+
+asv_data <-ISS.rob.comp.avg.B[curs$ASV,] %>% as.data.frame() %>% t()
+select <-df_BLW2.r %>% filter(Number %in% flop[[3]]) %>% pull(treatment)
+select <-df_BLW2.r %>% filter(Number %in% sig[[3]]) %>% pull(treatment)
+select <-df_BLW2.r %>% filter(Number %in% top[[3]]) %>% pull(treatment)
+asv_data <-asv_data[select,]
+
+cor_matrix <- cor(asv_data, method = "spearman")
+cor_threshold <- 0.6
+cor_matrix[abs(cor_matrix) < cor_threshold] <- 0
+network <- graph_from_adjacency_matrix(cor_matrix, mode = "undirected", weighted = TRUE, diag = FALSE)
+#network <- simplify(network)
+degrees <- degree(network)
+degrees %>% sort() %>% as.data.frame()
+filtered_network <- delete.vertices(network, V(network)[degrees <= 5])
+
+communities <- cluster_louvain(network)
+communities <- cluster_louvain(filtered_network)
+plot(network, 
+     vertex.size = 5, 
+     vertex.label.cex = 0.7, 
+     #vertex.color = communities$membership, 
+     edge.width = E(network)$weight * 2,
+     main = "Co-occurrence Network of Enriched ASVs")
+
+plot(network,
+     vertex.size = degree(network) * 2,
+     vertex.label.cex = 0.7,
+     edge.width = E(network)$weight * 2,
+     main = "Filtered Co-occurrence Network")
+
+subgraph <- induced_subgraph(network, V(network)[communities$membership == 1])
+plot(subgraph)
+
+key_nodes <- c("ASV146", "ASV467", "ASV500", "ASV3060", "ASV327", "ASV280","ASV90", "ASV58", "ASV1563")
+subnetwork <- induced_subgraph(network, V(network)$name %in% key_nodes)
+plot(subnetwork)
+
+
+                         
