@@ -1,0 +1,78 @@
+# Set up R
+
+# Bacterial and fungal indicators for disease suppressive composts in three pathogen-plant systems
+# Author: Anja Logo
+# Data: 10.10.24
+# Last changes: 10.10.24
+
+
+# Packages
+library(conflicted) # To check for conflicts between packaged
+library(RColorBrewer) # additional color 
+library(gridExtra) # Grid.arrange needed to draw the venn diagramm
+library(factoextra)
+library(multcompView) # letters for direct comparisons
+library(corrplot) # Correlations plots
+library(rstatix)
+library(Hmisc)
+#library(knitr)
+library(reshape2)
+library(hms)
+#library(kableExtra)
+library(ggpubr)
+library(dunn.test) # non-paramteric direct comparison
+library(agricolae)
+#library(lme4) # linear mixed models
+library(ggm)
+library(grid)
+library(ggfortify)
+library(ggrepel) # plot lables without overlap
+#library(glmulti)
+library(MuMIn)
+library(caret)
+#library(glmnet)
+library(adiv) # to claculate alpha diversity?
+library(ade4)
+library(vegan) # Multivariate analysis
+library(cowplot) # needed for arrange of alpha-diversity plots
+library(data.table)
+library(ggVennDiagram)
+library(ALDEx2) # Differential abundance analysis
+# library(ANCOMBC)
+library(Maaslin2)
+library(gtools)
+library(parallel)
+library(car)
+library(indicspecies) # For inddicator species analysis
+library(tidyverse)
+library(ComplexHeatmap) # For heat maps
+library(ggnewscale) # Allows more than one coloring in R! Very usefull
+library(seqinr) # Reading fasta sequences
+library(phytools) # For phylogenetical trees
+library(ggtree) # Phylogenetical tree
+library(msa) # For sequencing alignment
+library(VennDiagram)
+library(plyr)
+library(ape) # Conversion of DNA sequence format
+library(scales)
+
+
+# Define conflicts
+
+conflicted::conflicts_prefer(dplyr::mutate)
+conflicted::conflicts_prefer(dplyr::filter)
+conflicted::conflicts_prefer(dplyr::arrange)
+conflicted::conflicts_prefer(dplyr::select)
+conflicted::conflicts_prefer(dplyr::desc)
+conflicted::conflicts_prefer(dplyr::summarise)
+conflicted::conflicts_prefer(dplyr::summarize)
+conflicted::conflicts_prefer(ggpubr::get_legend)
+conflicted::conflicts_prefer(stats::cor)
+conflicted::conflicts_prefer(base::intersect)
+conflicted::conflicts_prefer(stats::sd)
+
+
+#sI <- sessionInfo()
+# The same, showing the RNGkind, but not the locale :
+#print(sI, RNG = TRUE, locale = FALSE)
+#toLatex(sI, locale = FALSE) # shortest; possibly desirable at end of report

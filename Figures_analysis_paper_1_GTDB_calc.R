@@ -1,0 +1,373 @@
+# Calculation file
+
+# Bacterial indicators for disease suppressive composts in three pathogen-plant systems
+# Author: Anja Logo
+# Data: 27.03.24
+# Last changes: 05.08.24
+
+source(file = "setup.R")
+
+# Function to summarize ASV tables
+smry_asv_seq <-function(data){
+  print(paste("Number of sequences", sum(data)))
+  print(paste(" Number of ASVs", nrow(data)))
+  print(paste("Number of sequences per sample"))
+  print(data %>% colSums() %>% sort() %>% as.data.frame() %>% summary()) # sequences per samples
+  print(paste("Number of ASVs per sample"))
+  print(ifelse(data >0, 1,0) %>% colSums() %>% sort() %>% as.data.frame() %>% summary())
+  
+}
+
+
+# ASV & Tax file------
+compost.exclude = c("K6", "K10", "K17", "K27", "K37")
+df_BLW2 = read.csv(file ="data/meta_data_compost_BLW_without_errors.csv", sep =";")
+factors = c("batch", "site", "company", "comp.system", "site_ID") # Change to factor
+for (i in factors) {
+  df_BLW2[, i] <- as.factor(df_BLW2[,i])
+}
+df_BLW2.r = df_BLW2 %>% filter(!treatment %in% compost.exclude) # Reduce normal distribution to 37 composts
+rm(factors)
+
+# Compost_ID for changing the labeling of the data frame
+compost_ID <- read.csv(file ="data/Key_treatment_compostID.csv", sep= ";")
+compost_ID$treatment = as.factor(compost_ID$treatment)
+compost_ID$compost_ID = as.factor(compost_ID$compost_ID)
+compost_ID$site_ID = as.factor(compost_ID$site_ID)
+compost_ID <- compost_ID %>% filter(!treatment %in% c("K27", "K37")) # Exclude two error composts
+compost_ID$treatment <-droplevels(compost_ID$treatment)
+
+# Design
+# Key for sequencing samples
+design.BLW2 <- read.csv(file ="data/design_BLW2.csv")
+design.BLW2$site <- as.factor(design.BLW2$site)
+
+# Add the new numbers to the design.BLW2
+design.BLW2 = merge(design.BLW2, compost_ID, by ="treatment", ) # Add new labeling
+rownames(design.BLW2) <- design.BLW2$ID
+design.BLW2$ID <- NULL
+design.BLW2 = design.BLW2[order(rownames(design.BLW2)),]
+design.BLW2$batch.y <-NULL
+setnames(design.BLW2, "batch.x", "batch")
+design.BLW2 = design.BLW2 %>% filter(!treatment %in% compost.exclude) # 37 compost
+
+# Tax file ASV
+tax <- read.table(file="Sequencing/8.all.ASV_metaxa.tax.wang.GTDB.derep.taxonomy", sep =";") # GDTB
+colnames(tax) <- c("V1", "Phyla", "Class", "Order", "Family", "Genus", "Species", "V8")
+tax[, c("ASV", "Kingdom")] <- str_split_fixed(tax[,1], "\t", 2)
+tax <- tax[c("ASV", "Kingdom", "Phyla", "Class", "Order", "Family", "Genus", "Species", "V8")]
+rownames(tax) <-tax$ASV
+tax<- tax[mixedorder(rownames(tax)), ] 
+tax <-tax[,-1]
+tax$V8 <- NULL
+
+# Remove percentages
+tax$Kingdom <- sub("\\(.*","",tax$Kingdom) # remove the percentage after the kingdom
+tax$Phyla <- sub("\\(.*","",tax$Phyla)
+tax$Class <- sub("\\(.*","",tax$Class)
+tax$Order <- sub("\\(.*","",tax$Order)
+tax$Family <- sub("\\(.*","",tax$Family)
+tax$Genus <- sub("\\(.*","",tax$Genus)
+tax$Species <- sub("\\(.*","",tax$Species)
+
+# Unrarefied ASV table (for indicators species analysis)
+asv = read.table(file="Sequencing/9.all.ASV_map.txt", header =T)
+colnames(asv) <- sub("_S.*","", colnames(asv))
+asv.BLW1 = asv
+asv <- asv[, !grepl("^K10|K6|K17|Std1|C19|C24|C25|C26|C27|C30", colnames(asv))] # Reduce only to 37 composts + 4 peat substrate
+asv <- asv[rowSums(asv)!=0,] # delete all ASVs that were only present in the discarded samples
+tax.BLW1 = tax # All the samples
+asv.BLW1 = asv.BLW1[rownames(tax.BLW1),]
+tax = tax[rownames(asv),] # Reduced samples to 164 samples
+
+# Remove non-bacterial tax.BLW1
+tax.B = tax.BLW1[tax.BLW1$Kingdom =="d__Bacteria",] 
+tax.n.B =tax.BLW1[tax.BLW1$Kingdom !="d__Bacteria",]
+tax.B.C = tax.B[!tax.B$Order == "o__Chloroplast",] # Chloroplasts
+tax.B.C.M = tax.B.C[!tax.B.C$Family == "f__Mitochondria",] # Mitochondria
+tax.BLW1 = tax.B.C.M
+
+summary_seq <- data.frame(matrix(data =NA, nrow =6, ncol = 5))
+colnames(summary_seq) <- c("Group", "ASVs_all", "seq_ASV_all", "ASVs_37", "seq_ASV_37" )                        
+summary_seq$Group = c("Archaea", "Unknown", "Chloroplasts", "Mitrochondria", "Bacteria", "Total")
+summary_seq$ASVs_all[1] <- tax.n.B %>% filter(Kingdom == "d__Archaea") %>% nrow()
+summary_seq$ASVs_all[2] <- tax.n.B %>% filter(Kingdom == "unknown") %>% nrow()
+summary_seq$ASVs_all[3] <- tax.B %>% filter(Order == "o__Chloroplast") %>% nrow()
+summary_seq$ASVs_all[4] <- tax.B %>% filter(Family == "f__Mitochondria") %>% nrow()
+summary_seq$ASVs_all[5] <- tax.B.C.M %>% nrow()
+summary_seq$ASVs_all[6] <- sum(summary_seq$ASVs_all[1:5])
+
+summary_seq$seq_ASV_all[1] <- asv.BLW1[tax.n.B %>% filter(Kingdom == "d__Archaea") %>% rownames(),] %>% sum()
+summary_seq$seq_ASV_all[2] <- asv.BLW1[tax.n.B %>% filter(Kingdom == "unknown") %>% rownames(),] %>% sum()
+summary_seq$seq_ASV_all[3] <- asv.BLW1[tax.B %>% filter(Order == "o__Chloroplast") %>% rownames(),] %>% sum()
+summary_seq$seq_ASV_all[4] <- asv.BLW1[tax.B %>% filter(Family == "f__Mitochondria") %>% rownames(),] %>% sum()
+summary_seq$seq_ASV_all[5] <- asv.BLW1[tax.B.C.M %>% rownames(),] %>% sum()
+summary_seq$seq_ASV_all[6] <- sum(summary_seq$seq_ASV_all[1:5])
+
+# Remove non-bacterial sequences only 37 composts + 4 peat
+tax.B = tax[tax$Kingdom =="d__Bacteria",]
+asv[rownames(tax.B),] %>% sum
+tax.n.B =tax[tax$Kingdom !="d__Bacteria",]
+tax.B.C = tax.B[!tax.B$Order == "o__Chloroplast",] # Chloroplasts
+asv[rownames(tax.B.C),] %>% sum()
+tax.B.C.M = tax.B[!tax.B$Family == "f__Mitochondria",] # Mitochondria
+asv[rownames(tax.B.C.M),] %>% sum()
+tax = tax.B.C.M
+
+summary_seq$ASVs_37[1] <- tax.n.B %>% filter(Kingdom == "d__Archaea") %>% nrow()
+summary_seq$ASVs_37[2] <- tax.n.B %>% filter(Kingdom == "unknown") %>% nrow()
+summary_seq$ASVs_37[3] <- tax.B %>% filter(Order == "o__Chloroplast") %>% nrow()
+summary_seq$ASVs_37[4] <- tax.B %>% filter(Family == "f__Mitochondria") %>% nrow()
+summary_seq$ASVs_37[5] <- tax.B.C.M %>% nrow()
+summary_seq$ASVs_37[6] <- sum(summary_seq$ASVs_37[1:5])
+
+summary_seq$seq_ASV_37[1] <- asv[tax.n.B %>% filter(Kingdom == "d__Archaea") %>% rownames(),] %>% sum()
+summary_seq$seq_ASV_37[2] <- asv[tax.n.B %>% filter(Kingdom == "unknown") %>% rownames(),] %>% sum()
+summary_seq$seq_ASV_37[3] <- asv[tax.B %>% filter(Order == "o__Chloroplast") %>% rownames(),] %>% sum()
+summary_seq$seq_ASV_37[4] <- asv[tax.B %>% filter(Family == "f__Mitochondria") %>% rownames(),] %>% sum()
+summary_seq$seq_ASV_37[5] <- asv[tax.B.C.M %>% rownames(),] %>% sum()
+summary_seq$seq_ASV_37[6] <- sum(summary_seq$seq_ASV_37[1:5])
+
+#write.csv(summary_seq, file ="Output/summary_seq.csv")
+
+rm(tax.n.B, tax.B, tax.B.C, tax.B.C.M, summary_seq)
+
+# Change to unclassified if not classified to a certain level
+tax.red = tax
+expected_starts <- c(Kingdom = "d", Phyla = "p", Class = "c", Order = "o", Family = "f", Genus = "g", Species = "s")
+for (col_name in names(expected_starts)) {
+  # Check if the column exists in your dataframe to avoid errors
+  if (col_name %in% colnames(tax.red)) {
+    # Get the expected start letter for the current column
+    expected_letter <- expected_starts[col_name]
+    
+    # Loop through each row in the current column
+    for (row_index in 1:nrow(tax.red)) {
+      # Extract the first letter of the current cell
+      current_letter <- substr(tax.red[[col_name]][row_index], 1, 1)
+      
+      # Check if the first letter matches the expected letter
+      if (current_letter != expected_letter) {
+        # If not, replace the cell value with "unclassified"
+        tax.red[[col_name]][row_index] <- "unclassified"
+      }}}}
+
+#write.table(tax.red, file ="tax.red.txt")
+#write.table(tax, file ="tax.B.BLW2.txt")
+#write.table(tax.BLW1, file ="tax.B.all.txt")
+
+rm(col_name, current_letter, expected_letter, expected_starts, row_index)
+
+# Normalization----------------
+# Exclude non-bacterial ASVs
+asv.B = asv[rownames(tax),]
+
+# Rarefy abundance table 100 times
+ISS.iters <- mclapply(as.list(1:100), function(x) rrarefy(t(asv.B), min(colSums(asv.B))), # 35928 sequences minimum
+                      mc.cores = 1) # 100 rarefied abundance tables
+
+# For alpha diversity calculations & beta diversity based on Ackermann methods
+
+ISS.array <- laply(ISS.iters, as.matrix)
+ISS <- apply(ISS.array, 2:3, median) # median of all iterations
+ISS.prop = prop.table(ISS, margin = 1) * 100  # get proportions
+rm(ISS.array)
+
+
+# Rarefied and robustly detected ASVs only composts
+ISS = ISS %>% t() %>% as.data.frame()
+ISS01 = ifelse(ISS > 0, 1, 0) %>% t() # presence/absence
+ISS01.meta <-merge(design.BLW2["treatment"], ISS01, by = 0)  # merge with design file
+row.names(ISS01.meta)<-ISS01.meta$Row.names;ISS01.meta$Row.names<-NULL
+ISS_01_rob <-as.data.frame(aggregate(ISS01.meta[,2:ncol(ISS01.meta)], list(ISS01.meta$treatment), median)) # calculate median
+ISS_01_rob <- ISS_01_rob %>% mutate_all(~ifelse(. == 0.5,0, .)) # Put the 2/4 (0.5) also to zero
+
+# Only composts
+ISS_01_rob_comp = ISS_01_rob[!grepl("St", ISS_01_rob$Group.1),] # Only select composts
+rownames(ISS_01_rob_comp) =ISS_01_rob_comp$Group.1 ; ISS_01_rob_comp$Group.1  <- NULL
+select <-colSums(ISS_01_rob_comp) >0 # Only select ASVs that are at least robustly detected in one compost
+ISS_01_rob_comp_red <-ISS_01_rob_comp[,select] # Select only robustly detected ASVs (unrarefied data)
+sum(colSums(ISS_01_rob_comp_red)== 0) # check if really all the 0 are gone
+select = colnames(ISS_01_rob_comp_red)
+ISS.rob.comp = ISS[select,] %>% t() %>% as.data.frame()
+rownames(ISS.rob.comp) == rownames(design.BLW2) # Check order
+ISS.rob.comp.avg = ISS.rob.comp %>% aggregate(list(design.BLW2$treatment), mean) # Calculate the average of the four samples
+ISS.rob.comp.avg = ISS.rob.comp.avg[!grepl("Std", ISS.rob.comp.avg$Group.1), ] 
+rownames(ISS.rob.comp.avg) <-ISS.rob.comp.avg[,1]; ISS.rob.comp.avg[,1] <- NULL
+
+# Compost and peat
+rownames(ISS_01_rob) =ISS_01_rob$Group.1 ; ISS_01_rob$Group.1  <- NULL
+select <-colSums(ISS_01_rob) >0 # Only select ASVs that are at least robustly detected in one compost
+ISS_01_rob_red <-ISS_01_rob[,select] # Select only robustly detected ASVs (unrarefied data)
+sum(colSums(ISS_01_rob_red)== 0) # check if really all the 0 are gone
+select = colnames(ISS_01_rob_red)
+ISS.rob = ISS[select,] %>% t() %>% as.data.frame()
+rownames(ISS.rob) == rownames(design.BLW2) # Check order
+ISS.rob.avg = ISS.rob %>% aggregate(list(design.BLW2$treatment), mean) # Calculate the average of the four samples
+rownames(ISS.rob.avg) <-ISS.rob.avg[,1]; ISS.rob.avg[,1] <- NULL
+
+# Same as ISS.rob.comp.avg but with unrarefied abundances table
+asv.t = asv %>% t() %>% as.data.frame()
+rownames(asv.t) == rownames(design.BLW2) # Check order
+asv.t.avg = asv.t %>% aggregate(list(design.BLW2$treatment), mean) # calculate mean for the four replicates
+
+asv.t.avg.comp = asv.t.avg[!grepl("Std", asv.t.avg$Group.1), ] # discard peat
+rownames(asv.t.avg.comp) <- asv.t.avg.comp$Group.1; asv.t.avg.comp$Group.1 <-NULL
+asv.rob.comp.avg = asv.t.avg.comp[, colnames(ISS.rob.comp.avg)] # select only robustly detected ASVs
+
+# Save data files
+# rarefied
+ISS = ISS[rowSums(ISS) != 0,]
+#write.table(ISS, file ="ISS.B.BLW2.txt") # all bacterial asvs after rarifying
+#write.table(ISS.rob.comp, file = "ISS.rob.comp.txt") # For beta diversity, only composts with replicates
+#write.table(ISS.rob.comp.avg, file="ISS.rob.comp.avg.txt") # for Indicator species analysis PCB, ISA, MaAsLin2, for beta diversiy only composts without replicates
+
+#write.table(ISS.rob, file = "ISS.rob.txt") # for beta diversiy compost and peat with replicates
+#write.table(ISS.rob.avg, file="ISS.rob.avg.txt") # For beta diversity compost and peat without replicates
+
+# unrarified
+#write.table = write.table(asv.B, file ="asv.B.BLW2.txt") # all bacterial asvs
+#write.table(asv.BLW1, file="asv.BLW1.txt") # For beta diversity compost and peat without replicates
+#write.table(asv.rob.comp.avg, file="asv.rob.comp.avg.txt") # For indictor species analysis Aldex2
+
+rm(ISS01, ISS01.meta, ISS_01_rob, ISS_01_rob_comp, select, ISS_01_rob_comp_red, ISS_01_rob_red, asv.t,
+   asv.t.avg, asv.t.avg.comp)
+
+# Calculate alpha diversity----------------------
+# Observed richness
+sobs <- mclapply(ISS.iters, function(x) specnumber(x), mc.cores = 1)
+sobs <- apply(laply(sobs, as.matrix), 2, mean)
+
+# Shannon diversity
+shannon <- mclapply(ISS.iters, function(x) diversity(x, index = "shannon"))
+shannon <- apply(laply(shannon, as.matrix), 2, mean)
+
+# Inverse Simpson diversity
+invsimpson <- mclapply(ISS.iters, function(x) diversity(x, index = "invsimpson"))
+invsimpson <- apply(laply(invsimpson, as.matrix), 2, mean)
+
+# Pielou's evenness
+evenness <- shannon/log10(sobs)
+
+# Bind to data.frame
+ISS.alpha <- data.frame(cbind(sobs, evenness, shannon, invsimpson))
+rm(sobs, shannon, invsimpson, evenness)
+ISS.alpha$evenness = ISS.alpha$shannon/ log(ISS.alpha$sobs) # correct evenness -> put to calculation part
+#write.csv(ISS.alpha, file ="ISS.alpha.B.BLW2.csv")
+
+# Calculate mean and merge with meta file for correlation analysis without peat
+rownames(ISS.alpha) == rownames(design.BLW2)
+ISS.alpha.merged =merge(design.BLW2, ISS.alpha, by =0) # merge with design
+ISS.alpha.mean = ISS.alpha.merged %>% group_by(treatment) %>% # Calculate averages for all variables
+  dplyr::summarize(mean.sobs= mean(sobs), mean.shannon =mean(shannon),
+                   mean.even = mean(evenness), mean.ivsimp = mean(invsimpson)) %>%
+  as.data.frame()
+asv1.alpha.BLW2 = ISS.alpha.mean[ grep("K", ISS.alpha.mean$treatment),] # Oly seelct compsots
+asv1.alpha.BLW2$td.shannon = exp(asv1.alpha.BLW2$mean.shannon) # Calculate addtional variable
+df_BLW2.div <-merge(df_BLW2.r, asv1.alpha.BLW2, by = "treatment") # Fuse with meta file
+#write.csv(df_BLW2.div, file ="df_BLW2.div.csv")
+
+rm(asv1.alpha.BLW2, ISS.alpha.merged, ISS.alpha.mean)
+
+
+# Calculate beta diversity--------------------
+
+rownames(ISS.iters[[1]]) == rownames(design.BLW2) # Check if the rownames are the same
+
+avg.vegdist = function(x, method ="bray") {
+  data = merge(design.BLW2, x, by= 0) # merge with design file
+  rownames(data) = data[,1] # change rownames
+  data[,1] = NULL
+  data2 = as.data.frame(aggregate(data[,(ncol(design.BLW2)+1):ncol(data)], list(data$treatment), mean))
+  rownames(data2) <-data2[,1]
+  data2[,1] <- NULL
+  vegdist(data2, method = "bray")
+}
+
+# All the samples replicates separately
+
+# Bray-curtis
+ISS.iters.bray <- mclapply(ISS.iters, function(x) vegdist(x, method = "bray"), mc.cores = 10)
+ISS.array.bray <- laply(ISS.iters.bray, as.matrix)
+ISS.bray <- as.dist(apply(ISS.array.bray, 2:3, mean))
+rm(ISS.iters.bray, ISS.array.bray)
+#write.table(ISS.bray %>% as.matrix() %>% as.data.frame(), file ="ISS.bray.txt")
+
+# Jaccard
+ISS.iters.jac <- mclapply(ISS.iters, function(x) vegdist(x, method = "jaccard"), mc.cores = 10)
+ISS.array.jac <- laply(ISS.iters.jac, as.matrix)
+ISS.jac <- as.dist(apply(ISS.array.jac, 2:3, mean))
+rm(ISS.iters.jac, ISS.array.jac)
+#write.table(ISS.jac %>% as.matrix() %>% as.data.frame(), file ="ISS.jac.txt")
+
+# Replicates together 
+
+# Bray curtis
+ISS.iters.avg.bray <- mclapply(ISS.iters, function(x, method ="bray") avg.vegdist(x), mc.cores = 30)
+ISS.array.avg.bray <- laply(ISS.iters.avg.bray, as.matrix)
+ISS.bray.avg <- as.dist(apply(ISS.array.avg.bray, 2:3, mean))
+rm(ISS.iters.avg.bray, ISS.array.avg.bray)
+#write.table(ISS.bray.avg %>% as.matrix() %>% as.data.frame(), file ="ISS.bray.avg.txt")
+
+# Jaccard
+ISS.iters.avg.jac <- mclapply(ISS.iters, function(x, method ="jaccard") avg.vegdist(x), mc.cores = 30)
+ISS.array.avg.jac <- laply(ISS.iters.avg.jac, as.matrix)
+ISS.jac.avg <- as.dist(apply(ISS.array.avg.jac, 2:3, mean))
+rm(ISS.iters.avg.jac, ISS.array.avg.jac)
+#write.table(ISS.jac.avg %>% as.matrix() %>% as.data.frame(), file ="ISS.jac.avg.txt")
+
+#data  <- read.table("ISS.bray.txt") %>% as.matrix() %>% as.dist() # How to read in the data again
+# Blast search----
+
+# 75 indicative ASVs BLW1 in NExtseq BLW2
+
+fasta.ind.BLW1 = read.fasta(file="../Sequencing_Data/Seqs_75_SVs.fasta", as.string =T, set.attributes= F) # FASTA file ind ASV BLW1
+names_ESV_BLW1 =names(fasta.ind.BLW1) # names ESV BLW1
+fasta.ind.BLW1_all = read.fasta(file="../Sequencing_Data/398SVs_sig_assoc_5strongly_disease_suppressive_composts.fasta", as.string =T, set.attributes= F) # FASTA file ind ASV BLW1
+names_ESV_BLW1_all = names(fasta.ind.BLW1_all)
+
+rm(fasta.ind.BLW1, fasta.ind.BLW1_all)
+
+asv.ind.BLW1.BLW2 =read.table(file ="ind_ASV_blast_search/blast_results_suppressiveSVs_Nextseq16S_BLW2_99_allowAll_GTDB.txt")
+colnames(asv.ind.BLW1.BLW2) <- c("query_id","subject_id","pct_identity", "aln_length", "n_of_mismatches", "gap_openings", "q_start","q_end",
+                                 "s_start","s_end","e_value","bit_score", "V1", "V2")
+
+asv.ind.BLW1.BLW2.all =read.table(file ="ind_ASV_blast_search/blast_results_suppressiveSVs_Nextseq16S_BLW2_99_allowAll_398ASVs_GTDB.txt")
+colnames(asv.ind.BLW1.BLW2.all) <- c("query_id","subject_id","pct_identity", "aln_length", "n_of_mismatches", "gap_openings", "q_start","q_end",
+                                 "s_start","s_end","e_value","bit_score", "V1", "V2")
+
+### 75 ASVS ind ASV BLW1-----
+# ind ASVs BLW1 not found at 99 simliarity in BLW2
+setdiff(names_ESV_BLW1, unique(asv.ind.BLW1.BLW2$query_id)) 
+
+# Which ones do we find with 100% similarity
+asv.ind.100 = asv.ind.BLW1.BLW2[asv.ind.BLW1.BLW2$pct_identity ==100 & asv.ind.BLW1.BLW2$aln_length > 300 & asv.ind.BLW1.BLW2$q_start ==1,]
+asv.ind.100.not.found = setdiff(names_ESV_BLW1, unique(asv.ind.100$query_id))
+asv.ind.BLW1.BLW2[asv.ind.BLW1.BLW2$query_id =="ESVb_11381", ]
+
+# Best fit
+ASVs.names.blast.BLW1.best <- c(asv.ind.100$subject_id, "ASV828")
+
+#write.table(ASVs.names.blast.BLW1.best, file="data/ASVS_names_blast_BLW1_best.txt")
+
+# All 99%
+ASVs.names.blast.BLW1.all <- asv.ind.BLW1.BLW2[ asv.ind.BLW1.BLW2$aln_length > 300 & asv.ind.BLW1.BLW2$q_start ==1,"subject_id"]
+#write.table(ASVs.names.blast.BLW1.all, file="data/ASVS_names_blast_BLW1_all.txt")
+
+### 389 ASVS ind ASV BLW1 ------
+setdiff(names_ESV_BLW1_all, unique(asv.ind.BLW1.BLW2.all$query_id)) 
+
+# Which ones do we find with 100% similarityy
+asv.ind.100 = asv.ind.BLW1.BLW2.all[asv.ind.BLW1.BLW2.all$pct_identity ==100 & asv.ind.BLW1.BLW2.all$aln_length > 400 & asv.ind.BLW1.BLW2.all$q_start ==1,]
+asv.ind.100.not.found = setdiff(names_ESV_BLW1_all, unique(asv.ind.100$query_id))
+
+# Best fit
+ASVs.names.blast.BLW1.best <- c(asv.ind.100$subject_id, c("ASV7073","ASV1157", "ASV1626", "ASV3390", "ASV828", "ASV25137","ASV7947","ASV428","ASV14040")
+)
+#write.table(ASVs.names.blast.BLW1.best, file="data/ASVS_names_blast_BLW1_best_389.txt")
+
+# All 99%
+ASVs.names.blast.BLW1.all <- asv.ind.BLW1.BLW2.all[ asv.ind.BLW1.BLW2.all$aln_length > 400 & asv.ind.BLW1.BLW2.all$q_start ==1,"subject_id"]
+#write.table(ASVs.names.blast.BLW1.all, file="data/ASVS_names_blast_BLW1_all_389.txt")
+
+rm(ASVs.names.blast.BLW1.all, ASVs.names.blast.BLW1.best, asv.ind.100, asv.ind.100.not.found)
