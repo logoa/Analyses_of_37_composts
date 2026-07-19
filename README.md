@@ -7,10 +7,10 @@ All analysis were conducted in R (v4.3.1) using RStudio (v2023.06). The R sessio
 
 The raw sequencing data are published as an SRA at the NCBI: Bacteria (PRJNA1200637), Fungi (PRJNA1201072)
 
-This respitory contains the following
+This respitory contains the following: 
 
 *Figures in publication*
-Figures_Logo_et_al_AEM_2025                Folder containing all Figures in the main part and supplementary of the publication
+* Figures_Logo_et_al_AEM_2025:  Folder containing all Figures in the main part and supplementary of the publication
 
 *Analysis Bioassays, compost characteristics and bacterial communties of 37 composts*
 * Bioassay_normal_distribution.R: R code which helps to automize the statistical analysis of the bioassay data. Output file: Bioassay_normal_distribution_filled.csv
