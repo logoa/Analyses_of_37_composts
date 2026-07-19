@@ -1,0 +1,48 @@
+R version 4.3.1 (2023-06-16 ucrt)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows 11 x64 (build 26200)
+
+Matrix products: default
+
+
+Random number generation:
+ RNG:     Mersenne-Twister 
+ Normal:  Inversion 
+ Sample:  Rejection 
+ 
+attached base packages:
+ [1] stats4    parallel  grid      stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] VennDiagram_1.7.3     futile.logger_1.4.3   msa_1.34.0            Biostrings_2.70.3     GenomeInfoDb_1.38.8   XVector_0.42.0        IRanges_2.36.0        S4Vectors_0.40.2      BiocGenerics_0.48.1  
+[10] ggtree_3.10.1         phytools_2.1-1        maps_3.4.2            ape_5.8-1             seqinr_4.2-36         ggnewscale_0.4.10     ComplexHeatmap_2.18.0 indicspecies_1.7.14   car_3.1-2            
+[19] carData_3.0-5         gtools_3.9.5          Maaslin2_1.16.0       ALDEx2_1.34.0         latticeExtra_0.6-30   zCompositions_1.5.0-1 truncnorm_1.0-9       NADA_1.6-1.1          survival_3.5-5       
+[28] MASS_7.3-60           ggVennDiagram_1.5.2   data.table_1.14.8     cowplot_1.1.1         vegan_2.6-4           permute_0.9-7         ade4_1.7-23           lubridate_1.9.3       forcats_1.0.0        
+[37] stringr_1.5.0         dplyr_1.1.3           purrr_1.0.2           readr_2.1.4           tidyr_1.3.0           tibble_3.2.1          tidyverse_2.0.0       caret_6.0-94          lattice_0.21-8       
+[46] MuMIn_1.47.5          ggrepel_0.9.6         ggfortify_0.4.16      ggm_2.5               agricolae_1.3-6       dunn.test_1.3.5       ggpubr_0.6.0          hms_1.1.3             reshape2_1.4.4       
+[55] Hmisc_5.2-3           rstatix_0.7.2         corrplot_0.95         multcompView_0.1-10   factoextra_1.0.7      ggplot2_3.5.0         gridExtra_2.3         RColorBrewer_1.1-3    conflicted_1.2.0     
+
+loaded via a namespace (and not attached):
+  [1] fs_1.6.3                    matrixStats_1.2.0           bitops_1.0-9                doParallel_1.0.17           httr_1.4.7                  numDeriv_2016.8-1.1         tools_4.3.1                
+  [8] backports_1.5.0             R6_2.6.1                    lazyeval_0.2.2              questionr_0.7.8             mgcv_1.8-42                 GetoptLong_1.0.5            withr_3.0.2                
+ [15] sp_2.2-0                    klaR_1.7-3                  cli_3.6.1                   Biobase_2.62.0              formatR_1.14                biglm_0.9-2.1               mvtnorm_1.2-4              
+ [22] robustbase_0.99-2           yulab.utils_0.2.0           foreign_0.8-84              dichromat_2.0-0.1           parallelly_1.43.0           labelled_2.12.0             rstudioapi_0.17.1          
+ [29] optimParallel_1.0-2         shape_1.4.6.1               generics_0.1.4              gridGraphics_0.5-1          combinat_0.0-8              Matrix_1.6-1.1              interp_1.1-6               
+ [36] abind_1.4-8                 lifecycle_1.0.4             scatterplot3d_0.3-44        clusterGeneration_1.3.8     SummarizedExperiment_1.32.0 adegraphics_1.0-21          recipes_1.0.10             
+ [43] SparseArray_1.2.4           promises_1.2.1              crayon_1.5.3                miniUI_0.1.1.1              haven_2.5.3                 pillar_1.10.2               knitr_1.50                 
+ [50] optparse_1.7.4              GenomicRanges_1.54.1        rjson_0.2.21                future.apply_1.11.1         codetools_0.2-19            fastmatch_1.1-4             glue_1.6.2                 
+ [57] ggfun_0.1.4                 RNeXML_2.4.11               treeio_1.26.0               vctrs_0.6.3                 png_0.1-8                   gtable_0.3.6                cachem_1.0.8               
+ [64] gower_1.0.1                 xfun_0.57                   S4Arrays_1.2.1              mime_0.12                   prodlim_2023.08.28          Rfast_2.1.0                 coda_0.19-4.1              
+ [71] pcaPP_2.0-4                 timeDate_4041.110           iterators_1.0.14            hardhat_1.3.1               lava_1.8.0                  rgl_1.2.8                   directlabels_2024.1.21     
+ [78] ellipsis_0.3.2              ipred_0.9-14                nlme_3.1-162                KernSmooth_2.23-21          AlgDesign_1.2.1             rpart_4.1.19                colorspace_2.1-0           
+ [85] DBI_1.2.3                   nnet_7.3-19                 phangorn_2.11.1             mnormt_2.1.1                tidyselect_1.2.1            compiler_4.3.1              htmlTable_2.4.3            
+ [92] expm_0.999-9                xml2_1.3.6                  DelayedArray_0.28.0         plotly_4.11.0               checkmate_2.3.2             scales_1.4.0                DEoptimR_1.1-3             
+ [99] quadprog_1.5-8              digest_0.6.33               rmarkdown_2.29              htmltools_0.5.9             pkgconfig_2.0.3             jpeg_0.1-11                 base64enc_0.1-3            
+[106] MatrixGenerics_1.14.0       highr_0.11                  fastmap_1.1.1               GlobalOptions_0.1.2         rlang_1.1.1                 htmlwidgets_1.6.4           shiny_1.8.0                
+[113] farver_2.1.2                jsonlite_1.8.8              BiocParallel_1.36.0         ModelMetrics_1.2.2.2        RCurl_1.98-1.17             magrittr_2.0.3              Formula_1.2-5              
+[120] GenomeInfoDbData_1.2.11     ggplotify_0.1.2             patchwork_1.2.0             Rcpp_1.1.1-1.1              RcppZiggurat_0.1.6          stringi_1.7.12              pROC_1.18.5                
+[127] zlibbioc_1.48.2             plyr_1.8.9                  listenv_0.9.1               deldir_2.0-4                splines_4.3.1               circlize_0.4.16             igraph_2.1.4               
+[134] uuid_1.2-0                  ggsignif_0.6.4              futile.options_1.0.1        XML_3.99-0.16.1             evaluate_1.0.4              lambda.r_1.2.4              RcppParallel_5.1.7         
+[141] tzdb_0.4.0                  foreach_1.5.2               httpuv_1.6.11               getopt_1.20.4               clue_0.3-65                 future_1.33.1               broom_1.0.5                
+[148] xtable_1.8-4                tidytree_0.4.6              later_1.3.1                 viridisLite_0.4.2           class_7.3-22                aplot_0.2.2                 memoise_2.0.1              
+[155] cluster_2.1.4               timechange_0.2.0            globals_0.18.0            
